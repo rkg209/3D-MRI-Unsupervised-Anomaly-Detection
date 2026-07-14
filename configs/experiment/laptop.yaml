@@ -1,0 +1,14 @@
+# @package _global_
+# Local verification. No GPU assumed. make train is NOT supported here.
+paths:
+  data_root: ~/data/mri
+  checkpoint_root: ~/checkpoints/mri
+
+data:
+  loader:
+    batch_size: 1
+    num_workers: 2
+    cache_rate: 0.0
+  eval_subset: 20 # evaluate 20 volumes only, for a fast local sanity check
+
+device: auto

@@ -1,0 +1,28 @@
+# UNETR — the primary model (best prior result). See specs/002-model-registry.md.
+#
+# CRITICAL: this is NOT monai.networks.nets.UNETR. The trained weights come from the custom
+# `UNETR_Reconstruction` (legacy/GUI/utilities/utility.py:15), which differs in two ways that
+# break state_dict key matching:
+#   - output head is nn.Conv3d (keys `out.weight`) vs MONAI's UnetOutBlock (`out.conv.conv.weight`)
+#   - it ends in a Sigmoid, so UNETR is the only model whose output is bounded to [0, 1]
+# It is still MONAI-backed: it composes monai.networks.blocks.Unetr* and monai.networks.nets.ViT,
+# which satisfies D6.
+
+name: unetr
+target: mri_ad.models.unetr.UNETRReconstruction
+
+params:
+  in_channels: 1
+  img_size: [16, 128, 128]
+  feature_size: 32
+  hidden_size: 768
+  mlp_dim: 3072
+  num_heads: 12
+  num_layers: 12
+  patch_size: [16, 16, 16]
+  norm_name: instance
+  res_block: true
+  conv_block: false
+  dropout_rate: 0.0
+
+checkpoint: ${paths.checkpoint_root}/unetr_mse_ssim_aug.pth

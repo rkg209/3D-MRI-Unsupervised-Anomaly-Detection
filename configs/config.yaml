@@ -1,0 +1,26 @@
+# Root Hydra config. Compose with: make eval HYDRA_OVERRIDES="model=unetr +experiment=cluster"
+defaults:
+  - data: default
+  - model: unetr
+  - loss: mse_ssim
+  - threshold: percentile
+  - _self_
+
+# Reproducibility spine (Spec 000). Every entry point calls seed_everything(seed) first.
+seed: 42
+deterministic: true
+
+paths:
+  data_root: ${oc.env:MRI_AD_DATA,./data}
+  checkpoint_root: ${oc.env:MRI_AD_CHECKPOINTS,./checkpoints}
+  artifact_root: ./artifacts
+
+# The system-wide shape invariant: (C, D, H, W). Any deviation at a module
+# boundary is a bug, not a config option. See the mri-domain skill.
+shape:
+  channels: 1
+  depth: 16
+  height: 128
+  width: 128
+
+device: auto  # auto -> cuda, else mps, else cpu

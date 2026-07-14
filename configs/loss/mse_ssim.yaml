@@ -1,0 +1,10 @@
+# SSIM + MSE, unweighted sum. This is the loss behind the best prior result.
+# Recovered verbatim from legacy/attUNET/3d-attentionunet.ipynb:
+#     return (1 - ssim(pred, target, data_range=1.0)) + F.mse_loss(pred, target)
+# The weighted (alpha) variant was written but COMMENTED OUT — it never ran.
+name: mse_ssim
+target: mri_ad.losses.SSIMMSELoss
+params:
+  data_range: 1.0
+  ssim_weight: 1.0
+  mse_weight: 1.0

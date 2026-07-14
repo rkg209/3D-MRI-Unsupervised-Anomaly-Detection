@@ -1,0 +1,4 @@
+name: ssim
+target: monai.losses.SSIMLoss
+params:
+  spatial_dims: 3

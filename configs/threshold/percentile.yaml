@@ -1,0 +1,18 @@
+# Residual -> binary anomaly mask. See specs/003-recon-engine.md.
+#
+# DELIBERATE DEVIATION from the prior work. The prior code used a hardcoded global
+# `residual > 0.1`. planning/02-architecture.md:183 claims a 95th-percentile default
+# "matches the prior work" — it does NOT. They are different strategies and give different Dice.
+#
+# A percentile threshold fixes the flagged-voxel count by construction (exactly 5% of voxels
+# flagged at p95), which changes Dice fundamentally. That is a defensible choice, but it must be
+# named as a change and justified by a sweep — not smuggled in as a reproduction.
+name: percentile
+target: mri_ad.recon.threshold.FixedPercentileThreshold
+params:
+  percentile: 95.0
+
+# Spec 003 acceptance requires sweeping these and reporting the curve, not picking one blindly.
+sweep:
+  percentiles: [90.0, 92.5, 95.0, 97.5, 99.0]
+  absolute: [0.05, 0.1, 0.15, 0.2] # includes the prior work's 0.1, for comparability

@@ -1,0 +1,16 @@
+# Perceptual loss (Med3D ResNet50).
+#
+# WARNING — this loss has NEVER been run in this project. In the prior repo the perceptual-loss
+# code is commented out in every notebook, and legacy/UNET/3d_slices_MSE_Perceptual.pth is an
+# LFS stub. There is no surviving code or checkpoint for it.
+#
+# Consequently the arch x loss matrix (Spec 005) renders this column as
+# "n/a (no training code / no checkpoint)" rather than fabricating a number.
+# Training it is fresh GPU compute and is therefore gated behind /train (manual only).
+name: perceptual
+target: monai.losses.PerceptualLoss
+params:
+  spatial_dims: 3
+  network_type: medicalnet_resnet50_23datasets
+  is_fake_3d: false
+  pretrained: true

@@ -1,0 +1,5 @@
+# Unweighted mean of MSE over 3 scales. From legacy/UNET/3d-monaiunet-slice-perceptual.ipynb.
+name: multiscale_mse
+target: mri_ad.losses.MultiScaleMSELoss
+params:
+  scales: [1.0, 0.5, 0.25]

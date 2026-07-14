@@ -1,0 +1,15 @@
+# @package _global_
+# College GPU cluster. Full test split; make train supported (manual invoke only).
+paths:
+  data_root: /scratch/${oc.env:USER}/mri-data
+  checkpoint_root: /scratch/${oc.env:USER}/checkpoints
+  artifact_root: /scratch/${oc.env:USER}/artifacts
+
+data:
+  loader:
+    batch_size: 2 # UNETR at (1,16,128,128) is ~8 GB at bs=2
+    num_workers: 8
+    cache_rate: 1.0
+  eval_subset: null # full split
+
+device: cuda
