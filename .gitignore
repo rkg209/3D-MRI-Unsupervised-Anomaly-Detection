@@ -1,0 +1,29 @@
+# ── Medical data & weights: NEVER commit (licensing + repo hygiene). See CLAUDE.md.
+data/
+checkpoints/
+*.nii
+*.nii.gz
+*.npy
+*.pt
+*.pth
+
+# Generated recon tensors are large; figures/tables under artifacts/ ARE committed.
+artifacts/results/recon/
+
+# ── Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# ── OS / editor
+.DS_Store
