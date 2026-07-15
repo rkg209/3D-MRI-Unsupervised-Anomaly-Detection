@@ -1,0 +1,46 @@
+# Data layer (Spec 001).
+#
+# NOTE: the prior work used DIFFERENT preprocessing for train and eval. That is a bug.
+# This config defines ONE pipeline used by both. See specs/001-data-layer.md.
+
+openbhb:
+  # Healthy T1, .npy files of shape (1, 1, 182, 218, 182)
+  dir: ${paths.data_root}/openbhb/val_quasiraw
+  max_volumes: null # null = use all
+  crop:
+    z: [50, 130] # -> depth 80
+    y: [20, 160] # -> 140
+    x: [20, 196] # -> 176
+
+brats:
+  # Anomalous, .nii, one subdir per subject. Only the T2 modality is used.
+  dir: ${paths.data_root}/brats/MICCAI_BraTS2020_TrainingData
+  modality: t2
+  # Segmentation labels are {0,1,2,4}. They MUST be binarized (seg > 0) and resized with
+  # NEAREST interpolation. The prior work trilinear-interpolated the raw labels -> fractional
+  # values -> an invalid Dice. Never do this.
+  binarize_label: true
+  label_interpolation: nearest
+
+preprocess:
+  normalize: minmax # to [0, 1]
+  eps: 1.0e-8
+  resize_mode: trilinear # images only; labels use `nearest`
+  chunk_depth: 16 # non-overlapping depth chunks -> (1,16,128,128)
+  chunking: deterministic # NEVER RandSpatialCrop on the eval path (breaks NFR-1)
+
+split:
+  # The split is deterministic given `seed` and is serialized to
+  # artifacts/split_contract.json. Reusing a different split requires an explicit override.
+  openbhb:
+    train: 0.85
+    val: 0.15
+  brats:
+    val: 0.2 # threshold-tuning holdout (trap #5: never tune a threshold on test)
+    test: 0.8
+  contract_path: ${paths.artifact_root}/split_contract.json
+
+loader:
+  batch_size: 8
+  num_workers: 4
+  cache_rate: 0.0 # 1.0 on the cluster (fits in RAM), 0.0 on a laptop

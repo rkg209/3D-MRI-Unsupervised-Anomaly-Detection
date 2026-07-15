@@ -98,6 +98,15 @@ def test_brats_labels_are_binarized_with_nearest_interpolation() -> None:
     assert cfg["brats"]["label_interpolation"] == "nearest"
 
 
+def test_split_config_names_both_datasets() -> None:
+    """Spec 001: the split contract partitions BOTH datasets, not just one train/val split."""
+    cfg = yaml.safe_load((REPO / "configs/data/default.yaml").read_text())
+    assert set(cfg["split"]["openbhb"]) == {"train", "val"}
+    assert set(cfg["split"]["brats"]) == {"val", "test"}
+    assert cfg["split"]["openbhb"]["train"] + cfg["split"]["openbhb"]["val"] == pytest.approx(1.0)
+    assert cfg["split"]["brats"]["val"] + cfg["split"]["brats"]["test"] == pytest.approx(1.0)
+
+
 def test_eval_chunking_is_deterministic() -> None:
     """A random crop on the eval path makes results irreproducible (violates NFR-1)."""
     cfg = yaml.safe_load((REPO / "configs/data/default.yaml").read_text())

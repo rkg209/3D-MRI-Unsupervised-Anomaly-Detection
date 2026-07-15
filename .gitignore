@@ -1,6 +1,7 @@
 # ── Medical data & weights: NEVER commit (licensing + repo hygiene). See CLAUDE.md.
-data/
-checkpoints/
+# Anchored to repo root — unanchored `data/` would also match src/mri_ad/data/ (the package).
+/data/
+/checkpoints/
 *.nii
 *.nii.gz
 *.npy

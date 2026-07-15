@@ -341,3 +341,85 @@ figure written with the max-GT-area depth selected correctly.
 **Next:** user runs `make check-data` then `make slice` on real weights to close acceptance tests
 1–5. Then Spec 001 (data layer) replaces `data/slice_io.py`; Spec 002 (registry) replaces
 `run_slice._instantiate`; Spec 003/004 extend threshold/metrics.
+
+---
+
+## 005 · Implemented Spec 001 — data layer
+**Date:** 2026-07-15 · **Spec:** 001 · **Status:** done
+
+### What
+Replaced the Spec 000 provisional single-volume loader with the real data layer: one shared MONAI
+preprocessing pipeline for both datasets, a deterministic serialized split contract, and a loud
+validator. New: `data/chunking.py` (`pad_depth`, `chunk_volume`, `flatten_chunks`), `data/transforms.py`
+(`build_transforms` — the one function both datasets call), `data/datasets.py` (`OpenBHBDataset`,
+`BraTSDataset`, chunk-level), `data/split.py` (`SplitContract`), `data/validation.py`
+(`DataValidator`), `data/loaders.py` (`build_dataloader`). Modified: `data/__init__.py` (exports),
+`configs/data/default.yaml` (`split:` restructured into `openbhb{train,val}`/`brats{val,test}`),
+`scripts/run_slice.py` (migrated onto `BraTSDataset`, dropped `load_brats_volume`), `tests/test_scaffold.py`
+(new `split.openbhb`/`split.brats` YAML assertion). Deleted `data/slice_io.py` (fully superseded).
+Tests: `tests/test_data.py` (12 tests, one per acceptance criterion, all synthetic `.npy`/`.nii`
+fixtures via `tmp_path` — no real data).
+
+### Why
+Every downstream Dice number depends on both datasets being preprocessed *identically* and the
+split being *stable and recorded* — the prior work failed both (different train/eval preprocessing,
+unrecorded split, invalid Dice from un-binarized trilinear-resized labels, only 1/8 chunks scored).
+Spec 001 makes each of those a codified, tested contract so a regression fails loudly at dataloader
+init instead of silently corrupting a result four specs later.
+
+### How
+- **`build_transforms(cfg, dataset=...)`** takes a raw, natively-oriented volume dict and returns
+  `{"image": (1,D,H,W) float32 in [0,1], ["label": (1,D,H,W) in {0.,1.}]}`. Only the orient/crop step
+  differs by dataset (`_OrientOpenBHBd` squeezes+crops the already-`(D,H,W)`-ordered `.npy`;
+  `_OrientBraTSd` permutes BraTS's native `(H,W,D)` — no crop, whole volume kept). Everything after
+  that — add-channel, label binarize-then-nearest-resize, image trilinear-resize, min-max
+  normalize — is one shared MONAI `Compose`. Per the plan's risk note, min-max normalize is a custom
+  `Lambdad` (not `ScaleIntensityd`) so the `eps`-offset formula matches `slice_io` exactly.
+- **Depth padding/chunking is separate** (`chunking.py`), applied downstream of `build_transforms` in
+  the dataset `__getitem__`, so `build_transforms` itself stays a pure per-volume function testable
+  with one call (acceptance #5).
+- **Chunk-level datasets** wrap a per-volume `monai.data.CacheDataset` (`cache_rate` from config) so
+  repeated chunk access doesn't reload/re-transform a volume from disk every time. `OpenBHBDataset`
+  computes `chunks_per_volume` from the fixed crop depth (no I/O needed); `BraTSDataset` reads each
+  subject's NIfTI header shape (`.shape`, not `.get_fdata()`) to size chunk offsets cheaply per
+  subject, so it tolerates non-uniform native depths across subjects. File paths are consumed by a
+  `_LoadOpenBHBd`/`_LoadBraTSd` step and popped before the dict is cached/returned — never present in
+  a returned item (NFR-13).
+- **`SplitContract`** deterministically shuffles sorted ids with `random.Random(seed)` then slices by
+  cumulative fraction; `openbhb` gets `train`/`val`, `brats` gets `val`/`test` (BraTS-val is the
+  threshold-tuning holdout, never touched until the final eval — trap #5). `verify()` does a full
+  dataclass equality check against a loaded contract and raises `SplitContractViolationError` naming
+  both seeds unless `override=True`.
+- **`DataValidator.validate_batch`** checks shape, dtype, and range in that order and always names the
+  *observed* value in the raised `DescriptiveValidationError`, never just "invalid batch."
+  `build_dataloader` calls it against the first batch at construction time, before any training/eval
+  loop starts.
+
+### Problems hit
+1. **`.gitignore`'s `data/` pattern was unanchored** and matched at any depth — it was silently
+   ignoring `src/mri_ad/data/` (the whole package!) and `configs/data/` in addition to the intended
+   top-level `data/`. Neither directory had ever actually been committed since the initial scaffold;
+   `git status` showed nothing for the six new files I'd just written until I noticed and fixed this.
+   Changed to `/data/` and `/checkpoints/` (root-anchored). This was a pre-existing latent bug, not
+   something this spec introduced, but it would have silently discarded the entire data layer at
+   commit time had it gone unnoticed.
+2. **MONAI `Resized` can't take `align_corners` with `mode="nearest"`** — passing `align_corners=False`
+   unconditionally raised. Fixed by only setting it for the trilinear (image) resize.
+3. A formatter hook fired between edits and stripped an import (`BraTSDataset` in `run_slice.py`,
+   `Callable` in `transforms.py`) as "unused" mid-edit, before the consuming code landed in the same
+   file. Caught by `ruff check` immediately after; re-added both.
+
+### Result
+`tests/test_data.py` → 12/12 passed; full suite (`test_scaffold.py` + `test_slice.py` + `test_data.py`)
+→ 41 passed, 6 skipped (nibabel-optional paths), all on synthetic fixtures, no real data required.
+`ruff format`/`ruff check` clean on every file this spec touched (`legacy/` and the pre-existing
+`psnr`/`ssim` stub docstrings have unrelated, pre-existing warnings, left alone). No `data/` or
+`checkpoints/` content is staged. `make slice`'s real-data path is unverified pending user-supplied
+BraTS + checkpoints (`make check-data` still fails on `checkpoints/`) — the migration onto
+`BraTSDataset` was verified by unit test and by direct execution against synthetic on-disk BraTS
+fixtures, reproducing the same reassembled-shape/Dice-in-range behavior as before.
+
+**Next:** Spec 002 (model registry) can now replace `run_slice._instantiate`; Spec 003 (recon engine)
+owns the `training=True` augmentation extension point left un-implemented in `build_transforms`;
+Spec 004 (eval harness) consumes `SplitContract` + `build_dataloader` to run the full test-split
+evaluation this spec's chunk-level `volume_index`/`chunk_index` contract was built for.
