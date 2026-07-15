@@ -67,8 +67,20 @@ class MetricsComputer:
             gt: Binary ground truth. **Must already be binarized** — pass ``(seg > 0)``.
             eps: Numerical-stability term; also defines the empty-mask convention
                 (both empty -> 1.0, one empty -> 0.0).
+
+        Note:
+            ``gt`` is used **as given** — this method does not binarize it. Passing a raw
+            ``{0,1,2,4}`` BraTS map here weights the numerator by label magnitude and yields an
+            invalid Dice; that is the prior work's bug and the reason the docstring demands
+            ``(seg > 0)``. See the module header.
         """
-        raise NotImplementedError("Spec 004")
+        pred = pred.flatten().float()
+        gt = gt.flatten().float()
+        denom = pred.sum() + gt.sum()
+        if denom == 0:  # both masks empty -> perfect agreement by convention
+            return 1.0
+        intersection = (pred * gt).sum()
+        return float((2.0 * intersection / (denom + eps)).item())
 
     @staticmethod
     def iou(pred: Tensor, gt: Tensor, eps: float = EPS) -> float:

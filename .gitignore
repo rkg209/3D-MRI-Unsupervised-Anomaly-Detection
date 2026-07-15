@@ -27,3 +27,11 @@ htmlcov/
 
 # ── OS / editor
 .DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Claude Code (development tool — not part of the project)
+.claude/

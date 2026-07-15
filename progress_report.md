@@ -275,3 +275,69 @@ Diffusion cells render `n/a (untrained)` in the 005/007 tables until Spec 013 is
 **Next:** run the `spec-reviewer` gate on Spec 013 and the revised specs before any implementation,
 then `/plan` → `/tasks` per the SDD loop. Compute estimate, sampler, and MONAI-version check for
 diffusion are deferred to the Spec 013 `/plan` step.
+
+---
+
+## 004 · Implemented Spec 000 — vertical slice & reproducibility spine
+**Date:** 2026-07-15 · **Spec:** 000 · **Status:** done
+
+### What
+Built the thinnest end-to-end path through the whole stack plus the reproducibility spine every
+later spec hangs on. New: `utils/device.py` (`DeviceManager`), `utils/run_logger.py` (`RunLogger`),
+`utils/__init__.py` exports; `models/unetr.py` (`UNETRReconstruction`, ported from legacy);
+`recon/threshold.py` (`FixedPercentileThreshold`); `data/slice_io.py` (provisional single-volume
+BraTS loader); `scripts/run_slice.py`. Modified: `eval/metrics.py` (implemented `MetricsComputer.dice`
+only), `configs/config.yaml` (added `slice.volume_id`), `pyproject.toml` (added `einops`, a hard
+dependency of MONAI's ViT). Tests: `tests/test_slice.py` (28 tests, all synthetic — no data/ckpt).
+
+### Why
+Nothing else may start until one path works end to end (Spec 000). A vertical slice surfaces
+integration failures — shape mismatches, checkpoint-format surprises, reassembly bugs — *now*,
+before four specs are built on a wrong assumption. Each piece is implemented in its proper
+single-source-of-truth home (metrics in `eval/`, thresholding in `recon/`) so 001–004 extend rather
+than replace it.
+
+### How
+- **UNETR** ported byte-identically from `legacy/GUI/utilities/utility.py` (attribute names `vit`,
+  `encoder1..4`, `decoder5..2`, `out`, `sigmoid`) so real checkpoints match under `strict=True`.
+  Deliberately NOT `monai.networks.nets.UNETR` (different head keys + no Sigmoid → silent partial
+  load; known-trap #4). `load_checkpoint` handles both on-disk layouts (bare `state_dict` and
+  `{"model_state_dict": ...}`), detects the Git-LFS pointer stub by magic bytes, and raises
+  `CheckpointError` naming the file on missing/stub/key-mismatch — never `strict=False`.
+- **dice** uses `gt` as given (does NOT binarize internally) so the raw-vs-binarized distinction is
+  visible and testable; both-empty→1.0, one-empty→0.0.
+- **Threshold** = 95th percentile via `torch.quantile` over the whole volume (hardcoded operating
+  point, stated as such; the sweep is Spec 003's job).
+- **Loader** binarizes `seg > 0` BEFORE nearest-neighbour resize, trilinear-resizes the image,
+  min-max normalizes, and pads depth to the next multiple of 16 (155→160) so the whole volume is
+  covered. Provisional — replaced by `BraTSDataset` (Spec 001).
+- **RunLogger** writes `artifacts/runs/<ts>/run_meta.json` with git SHA (+dirty), resolved config,
+  seed, hostname, start/end time, and recorded metrics; the slice never persists a scan-file path or
+  patient identifier (NFR-13).
+- Config uses `target`/`params` (not `_target_`), so `run_slice._instantiate` does manual dispatch —
+  provisional until Spec 002's registry.
+
+### Problems hit
+1. **MONAI ViT needs `einops`** (not a transitive dep in this env) — added to `pyproject.toml` as a
+   real runtime dependency, not a test-only extra.
+2. **The 12-layer skip-connection indexing** (`hidden_states[3,6,9]`) is hardwired to the trained
+   architecture; a small `num_layers=4` test model raised `IndexError`. Fixed the tests to keep 12
+   layers but shrink width (hidden_size 96, feature_size 8) so they stay CPU-cheap.
+3. **Reassembly bug caught by a smoke test (prior-work bug #2).** The first draft reassembled chunks
+   with `torch.cat(chunks, dim=0).squeeze(1)`, which concatenates the *channel* axis and keeps only
+   N=10 depth slices instead of 160 — the exact "scored 1 of 8 chunks" failure the spine exists to
+   surface. Fixed to `cat(dim=1).squeeze(0)` (concatenate depth, drop channel) and added a permanent
+   regression test (`test_chunk_reassembly_covers_whole_volume`).
+
+### Result
+`make test` → 28 passed (all synthetic; no data/checkpoints needed). New code is ruff-clean (two
+pre-existing D415 warnings remain in the `psnr`/`ssim` stubs, which are Spec 004's to fill). The full
+`make slice` GPU/data path is **pending user-supplied weights + BraTS** — `make check-data` currently
+FAILS (`checkpoints/` missing), so no real Dice number was produced; fabricating one would violate
+rule #6. The integration path (reassembly → threshold → dice → 5-panel figure) was verified on a
+synthetic model + fake volume: correct `(160,128,128)` reassembly, ~5% flagged, Dice in `[0,1]`,
+figure written with the max-GT-area depth selected correctly.
+
+**Next:** user runs `make check-data` then `make slice` on real weights to close acceptance tests
+1–5. Then Spec 001 (data layer) replaces `data/slice_io.py`; Spec 002 (registry) replaces
+`run_slice._instantiate`; Spec 003/004 extend threshold/metrics.

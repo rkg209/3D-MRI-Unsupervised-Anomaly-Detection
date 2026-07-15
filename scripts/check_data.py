@@ -68,7 +68,9 @@ def main() -> int:
         if not path.exists():
             problems.append(f"MISSING  checkpoint  {path}")
         elif is_lfs_stub(path):
-            problems.append(f"LFS STUB checkpoint  {path}  ({path.stat().st_size} bytes, no weights)")
+            problems.append(
+                f"LFS STUB checkpoint  {path}  ({path.stat().st_size} bytes, no weights)"
+            )
         else:
             mb = path.stat().st_size / 1e6
             ok.append(f"ok       checkpoint  {name}  ({mb:.1f} MB)")

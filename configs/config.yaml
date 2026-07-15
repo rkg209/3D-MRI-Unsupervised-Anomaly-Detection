@@ -24,3 +24,7 @@ shape:
   width: 128
 
 device: auto  # auto -> cuda, else mps, else cpu
+
+# Spec 000 vertical slice. volume_id: null -> use the first sorted BraTS subject.
+slice:
+  volume_id: null
