@@ -13,7 +13,9 @@ Requirements: [`planning/01-requirements.md`](planning/01-requirements.md).
 
 **Naive reconstruction models rebuild the tumor too well, so they fail to flag it.** Better
 PSNR/SSIM made detection *worse* in the prior work. UNETR's patch-based features constrain this
-best.
+best. The diffusion model (013) puts a sharper edge on this fact: does a *generative* prior resist
+rebuilding the tumor, or fall to the same failure? Reporting that honestly — either way — is the
+point.
 
 > **Optimize detection separability (Dice/IoU). NEVER optimize reconstruction fidelity.**
 > Any change that improves PSNR/SSIM at the cost of Dice is a **regression**, not an improvement.
@@ -29,12 +31,12 @@ They are never a headline number and never a target.
 |---|---|
 | D1 | **Greenfield rebuild.** `legacy/` is *reference only* — port logic, not structure. |
 | D2 | **Rigor & reproducibility first, then performance.** A clean, defensible study beats a fragile high score. |
-| D3 | Synthetic-anomaly training is **in scope** (the one performance novelty). Multi-scale attention is a **stretch**. |
+| D3 | **Headline comparison is three paradigms: Classical (006) vs UNETR vs Diffusion/AnoDDPM (013)** — not the near-identical UNet/AttUNet/UNETR trio (that was the prior work; UNet/AttUNet are kept only as reference rows). Two performance novelties: **synthetic-anomaly training** (009, on UNETR) and the **diffusion paradigm** (013). Multi-scale attention (012) remains a **stretch**. |
 | D4 | **MRI only.** The old "CT" framing is dropped entirely. |
 | D5 | Mobility-transfer is a **README paragraph only** — a conceptual analogy, not a tested result. |
 | D6 | **Adopt MONAI** for 3D transforms, datasets, and backbones. Don't hand-roll. |
 | D7 | **Spec-driven development**: `/specify` → `/plan` → `/tasks` → implement. Specs live in `specs/`. |
-| D8 | Data & checkpoints are **user-supplied**. Run `make check-data` before any eval or training. Only Spec 009 needs fresh compute. |
+| D8 | Data & checkpoints are **user-supplied**. Run `make check-data` before any eval or training. **Specs 009 and 013 need fresh compute** (both `/train`-gated); every other spec builds a harness around saved outputs. |
 
 **D8 caveat:** the seven `.pth` files under `legacy/` are **Git LFS pointer stubs — 133 bytes, no
 weights.** Real weights come from the Google Drive folder in `README.md` and go in `checkpoints/`.

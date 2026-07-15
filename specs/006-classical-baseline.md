@@ -44,7 +44,7 @@ plainly in Spec 007, not glossed.
 
 ## Out of scope
 
-The DL-vs-classical narrative (007). Voxel-level classical localization — see below.
+The three-paradigm comparison narrative (007). Voxel-level classical localization — see below.
 
 ## Notes / deviations
 

@@ -49,7 +49,10 @@ Config `configs/synth/fpi.yaml`: `patch_size_range: [8,32]`, `n_patches_range: [
 
 ## Out of scope
 
-Any architecture change (that is 012). Training a model from scratch — we fine-tune.
+Any architecture change (that is 012). Training a model from scratch — we fine-tune. **The diffusion
+model is a separate track (Spec 013): FPI/synthetic-anomaly here applies to UNETR only.** Fine-tuning
+diffusion on FPI-corrupted data is a possible future extension, explicitly out of scope for both
+specs.
 
 ## Notes / deviations
 

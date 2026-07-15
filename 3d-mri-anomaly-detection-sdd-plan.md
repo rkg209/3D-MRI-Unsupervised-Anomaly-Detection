@@ -17,7 +17,7 @@ These were settled before writing this plan. Claude Code should treat them as co
 |---|---|---|
 | D1 | Codebase starting point | **Greenfield rebuild.** The old notebook/research repo is *reference only* — port logic, not structure. |
 | D2 | What "improved" optimizes for | **Rigor & reproducibility first, then performance.** A clean, defensible comparative study beats a fragile high score. |
-| D3 | New modeling scope | **Synthetic-anomaly (anomaly-informed) training is in scope** as the one performance novelty. **Multi-scale attention is a stretch spec** — written but off the critical path. |
+| D3 | New modeling scope | **Headline comparison reframed to three paradigms — Classical (Spec 006) vs UNETR vs Diffusion/AnoDDPM (Spec 013)** — replacing the near-identical UNet/AttUNet/UNETR trio of the prior work (UNet/AttUNet kept as reference rows only). **Two performance novelties: synthetic-anomaly (anomaly-informed) training (Spec 009, on UNETR) and the diffusion paradigm (Spec 013).** **Multi-scale attention (Spec 012) remains a stretch spec** — written but off the critical path. |
 | D4 | Modality | **MRI only.** Drop the old "CT" framing entirely. |
 | D5 | Mobility-transfer framing | **README paragraph only.** No driving-data code, no experiment — stated as conceptual transfer toward the mobility resume. |
 | D6 | Core framework | **Adopt MONAI** for 3D transforms, datasets, and model backbones (UNet / Attention-UNet / UNETR) instead of hand-rolling. |
@@ -52,7 +52,8 @@ Detect anomalies (tumors / lesions) in **3D brain MRI without any tumor labels**
 
 **What's new in this rebuild**
 - Clean, reproducible, config-driven codebase (greenfield).
-- **Classical-ML baseline** (radiomic / intensity / texture features → XGBoost/LightGBM, cross-validated, ROC-AUC/PR) — closes the resume's classical-ML gap and enables a DL-vs-classical comparison.
+- **Classical-ML baseline** (radiomic / intensity / texture features → XGBoost/LightGBM, cross-validated, ROC-AUC/PR) — closes the resume's classical-ML gap and anchors one leg of the three-paradigm comparison.
+- **Diffusion model (AnoDDPM, Spec 013)** — a generative denoising prior over healthy anatomy, the third and newest paradigm; replaces the redundant UNet/AttUNet headline slots and puts a sharper test on the central failure mode.
 - **Synthetic-anomaly training** to attack the core failure mode directly.
 - A tightened evaluation harness and auto-generated results tables.
 - Mobility-transfer framing paragraph in the README.
@@ -162,7 +163,7 @@ Sub-agents get their own context window and return only a summary — use them t
 | `spec-reviewer` | strong | Critiques a draft spec for completeness and **testability** before you approve it. Gatekeeper for the SDD loop. |
 | `lit-scout` | mid | Web/docs research for methods (3D synthetic-lesion techniques, PyRadiomics features, MONAI APIs). Isolated so reference-reading noise never floods the main context. |
 | `experiment-runner` | cheap (Haiku-class) | Drives long train/eval runs and returns just the metrics summary + artifact paths. Cheap model because it's orchestration, not reasoning. |
-| `results-analyst` | strong | Reads saved metrics/outputs and writes the honest comparison narrative (architecture×loss, DL-vs-classical, before/after synthetic). |
+| `results-analyst` | strong | Reads saved metrics/outputs and writes the honest comparison narrative (fidelity-vs-detection, the three-paradigm Classical-vs-UNETR-vs-Diffusion table, before/after synthetic). |
 | `torch-reviewer` | strong | Reviews PyTorch/MONAI code for the bugs research code actually hits: tensor-shape mismatches, device placement, `train()`/`eval()` mode, gradient leaks, nondeterminism. |
 
 ### 3.6 MCP servers
@@ -226,21 +227,24 @@ The heart of the method: given a model + volume, produce reconstruction, residua
 **Spec 004 · Evaluation harness**
 Localization metrics (Dice, IoU) against BraTS segmentation maps; reconstruction-quality metrics (PSNR, SSIM) kept strictly as *explanatory context*; per-volume and aggregate; auto-generated results tables + plots from **saved** outputs. *Acceptance:* reproduces the prior report's headline numbers for UNETR within tolerance, from checkpoints alone.
 
-**Spec 005 · Architecture × loss comparison study**
-Orchestrate the full matrix (architectures × MSE / SSIM / MSE+SSIM / perceptual / multi-scale) into one clean comparison table, with the **central-finding analysis**: show that higher reconstruction fidelity does not buy better detection. *Acceptance:* a single generated table + written analysis covering the matrix, authored by `results-analyst`.
+**Spec 005 · Fidelity-vs-detection study (arch × loss + diffusion)**
+Orchestrate the matrix (UNETR × MSE / SSIM / MSE+SSIM / perceptual / multi-scale; UNet/AttUNet as reference rows; a diffusion row) into one clean comparison table, with the **central-finding analysis**: show that higher reconstruction fidelity does not buy better detection, and test whether the diffusion model's generative prior escapes that anti-correlation. *Acceptance:* a single generated table + written analysis covering the matrix, authored by `results-analyst`.
 
 ### Phase C — The resume-gap closer
 
 **Spec 006 · Classical-ML baseline**
 Radiomic / intensity / texture feature extraction (PyRadiomics-style) → XGBoost/LightGBM → k-fold cross-validation → ROC-AUC / PR-AUC. *Open sub-decision for the `/plan` step:* operating granularity — **slice-level** anomaly classification (clean ROC-AUC, weak localization) vs **supervoxel/region-level** (enables crude localization comparable to Dice). Resolve in the plan; the spec should state both and pick one with justification. *Acceptance:* cross-validated AUC reported with the granularity explicitly documented.
 
-**Spec 007 · DL-vs-classical comparison**
-Put the deep and classical approaches on the **same test split** and compare honestly — where each wins, where each fails, on a common footing (and note any metric-comparability caveats from Spec 006's granularity choice). *Acceptance:* one comparison artifact (table + ROC/PR overlay + narrative).
+**Spec 007 · Paradigm comparison — Classical vs UNETR vs Diffusion**
+Put the three paradigms on the **same test split** and compare honestly — where each wins, where each fails, on a common footing (and note any metric-comparability caveats from Spec 006's granularity choice). This is the project's headline table. *Acceptance:* one comparison artifact (table + ROC/PR overlay + narrative).
 
-### Phase D — Performance novelty
+### Phase D — Performance novelties  *(the two fresh-compute specs)*
 
-**Spec 009 · Synthetic-anomaly (anomaly-informed) training**  *(the only fresh-compute spec)*
+**Spec 009 · Synthetic-anomaly (anomaly-informed) training**  *(fresh compute)*
 Generate plausible synthetic lesions on healthy volumes (e.g., Poisson-blend / FPI / 3D CutPaste-style corruptions) and train the model to **restore the healthy version**, so it learns to erase anomalous-looking regions rather than copy them. Fine-tune from the existing UNETR checkpoint (cheap). Produce the **before/after** Dice story on the same test split. *Acceptance:* a controlled before/after table on the identical split, with synthetic-generation parameters logged. *Guardrail:* `/train` is manual-invoke only.
+
+**Spec 013 · Diffusion-based anomaly detection (AnoDDPM)**  *(fresh compute — the newest paradigm)*
+Train a DDPM (MONAI `DiffusionModelUNet` + `DDPMScheduler`) on **healthy** OpenBHB; at inference, partially noise the input then denoise to a healthy estimate whose residual feeds the existing `recon/` engine. Conforms to the `AnomalyDetectionModel` interface, so `recon/eval/classical` are untouched — it is a registry drop-in. Becomes the third column of the Spec 007 headline table. *Acceptance:* the model registers/loads/runs through the shared interface and appears in the 005/007 tables on the identical split; if it does not beat UNETR, that is reported. *Guardrail:* `/train` is manual-invoke only.
 
 ### Phase E — Artifact & presentation
 
@@ -264,20 +268,22 @@ An architectural variant adding multi-scale attention to the best model, written
         │                                                                 │
         └──────────────── (everything below reuses these) ───────────────┘
                                       │
-        ┌─────────────────────────────┼─────────────────────────────┐
-        ▼                             ▼                              ▼
- 005 arch×loss study          006 classical baseline          009 synthetic-anomaly (TRAIN)
-        │                             │                              │
-        └─────────────► 007 DL-vs-classical ◄──────────┘            │
-                                      │                              │
-                                      ▼                              ▼
+   ┌──────────────┬──────────────┬──────────────┬──────────────┐
+   ▼              ▼              ▼              ▼              ▼
+ 005 fidelity   006 classical  009 synth-     013 diffusion   (004 feeds all)
+ vs-detection   baseline       anomaly (TRAIN) AnoDDPM (TRAIN)
+   │            │                              │
+   └────────────┴──► 007 paradigm comparison ◄─┘
+                     (Classical vs UNETR vs Diffusion)
+                                      │
+                                      ▼
                               010 visualization ─► 011 reporting/README
                                                           │
                                                           ▼
                                             012 multi-scale attention (stretch)
 ```
 
-Critical path: **000 → 001 → 002 → 003 → 004**, then 005 / 006 / 009 can proceed in parallel, converging on 007 and the 010–011 artifact. 012 is optional.
+Critical path: **000 → 001 → 002 → 003 → 004**, then 005 / 006 / 009 / 013 can proceed in parallel, converging on 007 (the headline three-paradigm table) and the 010–011 artifact. 009 and 013 are the two `/train`-gated specs; 012 is optional.
 
 ---
 
@@ -288,4 +294,4 @@ Critical path: **000 → 001 → 002 → 003 → 004**, then 005 / 006 / 009 can
 - README carries the diagram, the metric scorecard, reproducibility instructions, and the mobility paragraph.
 - A demo video exists for the 3D visualization.
 - `data/` and `checkpoints/` are provably absent from git history.
-- The honest comparative narrative — architecture×loss, DL-vs-classical, synthetic before/after — is written and defensible in an interview.
+- The honest comparative narrative — fidelity-vs-detection, the three-paradigm Classical-vs-UNETR-vs-Diffusion comparison, synthetic before/after — is written and defensible in an interview.

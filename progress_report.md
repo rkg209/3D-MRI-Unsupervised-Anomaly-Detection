@@ -218,3 +218,60 @@ functional command, and it correctly reports `data/`/`checkpoints/` as missing.
 
 **Next:** pick the next spec to implement. Spec 000 (vertical slice) is the critical-path starting
 point per `specs/README.md`.
+
+---
+
+## 003 · Reframed the headline comparison to three paradigms (Classical vs UNETR vs Diffusion)
+**Date:** 2026-07-15 · **Spec:** 002, 005, 007, 013 (+ D3/D8, plan, requirements) · **Status:** done
+
+### What
+Replaced the prior work's UNet vs Attention-UNet vs UNETR comparison — three flavours of one
+deterministic-reconstruction paradigm — with a three-**paradigm** comparison: Classical ML (Spec
+006) vs UNETR vs a diffusion model (AnoDDPM, new Spec 013). UNet and Attention-UNet are kept in the
+registry only as low-cost prior-work reference rows. Synthetic-anomaly training (Spec 009) stays on
+UNETR as a second, independent novelty. No implementation code was written — this is a spec/doc
+revision that re-enters the SDD loop.
+
+### Why
+The user observed that comparing UNet/AttUNet/UNETR reproduces what the prior work already did and
+differs only marginally between the three — rigor without new insight. Pitting three genuinely
+different paradigms (engineered features + gradient boosting, transformer reconstruction, generative
+denoising prior) against each other is a stronger, more novel study, and it sharpens the project's
+central domain fact: does a *generative* prior resist rebuilding the tumor, or fall to the same
+failure the reconstruction models do? Either answer, reported honestly, is a finding.
+
+### How
+- **New `specs/013-diffusion-anomaly.md`** — AnoDDPM (MONAI `DiffusionModelUNet` + `DDPMScheduler`),
+  fresh compute, `/train`-gated, structured like Spec 009. Numbered 013 (not the deliberately-empty
+  008 slot). Its acceptance tests assert the extension guarantee: it touches only its module + a
+  YAML + a checkpoint path, with zero changes to `recon/`, `eval/`, `classical/`.
+- **Spec 002** — added `DiffusionADModel` as a fourth interface implementation; marked UNet/AttUNet
+  as reference rows; extended acceptance tests to handle "no checkpoint until trained" (raises
+  `CheckpointError`, never `strict=False`).
+- **Spec 005** — reframed as the fidelity-vs-detection *mechanism* study: keeps the UNETR loss sweep
+  as the core evidence, demotes UNet/AttUNet to reference rows, adds a diffusion row to test whether
+  the generative prior escapes the PSNR↔Dice anti-correlation.
+- **Spec 007** — renamed and widened from two-way DL-vs-classical to the three-paradigm *headline*
+  table (Classical vs UNETR vs Diffusion), depends on 013, same slice-level common-footing caveat
+  applied to both DL models.
+- Annotated Specs 009 and 012; updated `specs/README.md` index + build-order diagram; updated
+  `CLAUDE.md` (D3, D8, central-fact), `3d-mri-anomaly-detection-sdd-plan.md` (§0 D3, §5 spec list +
+  diagram), and `planning/01-requirements.md` (FR-11, FR-23, FR-30/31, T-2, new FR-33b..e).
+
+### Problems hit
+The diffusion model breaks the project's "existing checkpoints are the compute baseline" assumption
+(D8/C-6): it is the first model with **no** pre-trained checkpoint, so it must be trained fresh. This
+was resolved by (a) making it the **second** `/train`-gated spec alongside 009, never autonomous,
+and (b) updating D8 to name both fresh-compute specs. The `AnomalyDetectionModel` interface absorbed
+the new paradigm cleanly — AnoDDPM's noise→denoise inference returns a same-shape reconstruction, so
+`recon/`/`eval/`/`classical/` are untouched, exactly the extension guarantee Spec 002.8 / 012.1
+already test.
+
+### Result
+Locked decision D3 rewritten. One new spec (013, draft) and five revised specs (002, 005, 007, and
+notes in 009/012), plus README/plan/requirements/CLAUDE.md all consistent on the new comparison.
+Diffusion cells render `n/a (untrained)` in the 005/007 tables until Spec 013 is run.
+
+**Next:** run the `spec-reviewer` gate on Spec 013 and the revised specs before any implementation,
+then `/plan` → `/tasks` per the SDD loop. Compute estimate, sampler, and MONAI-version check for
+diffusion are deferred to the Spec 013 `/plan` step.

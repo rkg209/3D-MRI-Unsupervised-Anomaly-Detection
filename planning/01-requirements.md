@@ -66,7 +66,7 @@
 
 ### 4.3 Model Registry & Checkpoint Loading
 
-**FR-11.** The model registry (`src/mri_ad/models/`) shall expose UNet, Attention-UNet, and UNETR as MONAI-backed modules behind a single uniform interface. The interface shall define at minimum: `forward(x)`, `load_checkpoint(path)`, and a `model_card` property returning architecture metadata.
+**FR-11.** The model registry (`src/mri_ad/models/`) shall expose UNet, Attention-UNet, UNETR, and a diffusion model (AnoDDPM, Spec 013) as MONAI-backed modules behind a single uniform interface. UNet and Attention-UNet are retained as prior-work reference rows; UNETR and the diffusion model are the headline deep-learning paradigms (with the classical baseline, Spec 006, they form the three-way comparison). The interface shall define at minimum: `forward(x)`, `load_checkpoint(path)`, and a `model_card` property returning architecture metadata.
 
 **FR-12.** Every registered model shall load its corresponding pre-trained checkpoint from the path specified in config and execute a forward pass on a real batch without error.
 
@@ -96,7 +96,7 @@
 
 ### 4.6 Architecture × Loss Comparison Study
 
-**FR-23.** The comparison study (`specs/005`) shall evaluate all combinations of the three registered architectures (UNet, Attention-UNet, UNETR) against the following loss functions: MSE, SSIM, MSE+SSIM, perceptual (ResNet50 pretrained on Med3D), and multi-scale MSE.
+**FR-23.** The fidelity-vs-detection study (`specs/005`) shall evaluate the UNETR anchor against the following loss functions: MSE, SSIM, MSE+SSIM, perceptual (ResNet50 pretrained on Med3D), and multi-scale MSE; shall include UNet and Attention-UNet as prior-work reference rows; and shall include the diffusion model (AnoDDPM) as a reconstruction-based row to test whether its generative prior escapes the fidelity-vs-detection anti-correlation. The near-identical UNet/AttUNet/UNETR headline comparison of the prior work is explicitly superseded by the three-paradigm comparison in FR-30/FR-31.
 
 **FR-24.** Results shall be presented in a single auto-generated comparison table showing Dice and IoU for every architecture × loss combination, sourced from saved checkpoint outputs.
 
@@ -114,9 +114,9 @@
 
 ### 4.8 DL-vs-Classical Comparison
 
-**FR-30.** The DL-vs-classical comparison (`specs/007`) shall evaluate both the best deep-learning model and the classical baseline on the **identical** test split.
+**FR-30.** The paradigm comparison (`specs/007`) shall evaluate three paradigms — the classical baseline, the UNETR reconstruction model, and the diffusion model (AnoDDPM) — on the **identical** test split. This is the project's headline comparison.
 
-**FR-31.** The comparison artifact shall include: a side-by-side metrics table, overlaid ROC and PR curves, and a written narrative identifying where each approach wins and where each fails.
+**FR-31.** The comparison artifact shall include: a side-by-side metrics table with all three paradigms, overlaid ROC and PR curves, and a written narrative identifying where each approach wins and where each fails (including, if the data shows it, that diffusion does not beat UNETR or that the classical baseline is competitive).
 
 **FR-32.** Any metric-comparability caveats arising from the granularity choice made in FR-28 (e.g., slice-level AUC vs. voxel-level Dice) shall be explicitly stated in the comparison narrative.
 
@@ -131,6 +131,16 @@
 **FR-36.** Synthetic-anomaly generation parameters (corruption type, intensity range, size range, blend parameters) shall be fully specified in config and logged with each training run.
 
 **FR-37.** The spec shall produce a controlled before/after comparison table showing Dice and IoU on the identical BraTS test split, before and after synthetic-anomaly fine-tuning.
+
+### 4.9b Diffusion-Based Anomaly Detection (AnoDDPM)
+
+**FR-33b.** The diffusion module (Spec 013) shall implement AnoDDPM: a DDPM (MONAI `DiffusionModelUNet` + `DDPMScheduler`, `spatial_dims=3`) trained only on healthy OpenBHB volumes, exposed through the same `AnomalyDetectionModel` interface as every other registered model (FR-11), so the reconstruction engine, evaluation harness, and classical baseline require no changes.
+
+**FR-33c.** At inference the model shall partially noise the input volume to a configurable timestep and denoise it back to a healthy estimate of shape `(1, 16, 128, 128)`; the residual against that estimate shall feed the existing reconstruction/anomaly-map engine (FR-15).
+
+**FR-33d.** Diffusion training (noise schedule, timesteps, partial-noise level, sampler, seed) shall be fully specified in config and logged with each run, shall never be launched autonomously, and shall be reachable only via the manual-invoke `/train` skill / `make train` (C-3). Its checkpoint does not exist until trained; `load_checkpoint` shall raise a descriptive error rather than silently partial-loading.
+
+**FR-33e.** The diffusion model shall appear as a column in the FR-30 paradigm comparison and a row in the FR-23 study, scored on the identical test split and threshold strategy. If it does not improve on UNETR, that result shall be reported, not hidden (NFR-21/honest-reporting).
 
 ### 4.10 3D Visualization & Demo Video
 
@@ -266,7 +276,7 @@
 
 **T-1. PyTorch** — primary deep-learning framework; version pinned in `pyproject.toml`.
 
-**T-2. MONAI** — 3D medical imaging transforms, `CacheDataset`, UNet, Attention-UNet, and UNETR backbone implementations. Replaces all hand-rolled 3D model and transform code from the prior work.
+**T-2. MONAI** — 3D medical imaging transforms, `CacheDataset`, UNet, Attention-UNet, and UNETR backbone implementations, plus diffusion components (`DiffusionModelUNet` and `DDPMScheduler`, from the MONAI Generative code merged into core) for the AnoDDPM model (Spec 013). Replaces all hand-rolled 3D model and transform code from the prior work. (The pinned MONAI version must ship these diffusion components; confirmed/bumped during the Spec 013 `/plan` step.)
 
 ### 7.2 Classical ML
 

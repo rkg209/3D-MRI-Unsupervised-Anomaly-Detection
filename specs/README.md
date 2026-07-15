@@ -9,20 +9,25 @@ Specs define **what** and the acceptance tests; plans define **how**.
 ```
 000 vertical slice ─► 001 data ─► 002 models ─► 003 recon engine ─► 004 eval harness
                                                                           │
-        ┌─────────────────────────────┬─────────────────────────────┐─────┘
-        ▼                             ▼                             ▼
- 005 arch×loss study          006 classical baseline         009 synthetic-anomaly (TRAIN)
-        │                             │                             │
-        └──────────► 007 DL-vs-classical ◄─────────────┘            │
-                                      │                             │
-                                      ▼                             ▼
+   ┌──────────────┬──────────────┬──────────────┬──────────────┐─────────┘
+   ▼              ▼              ▼              ▼              ▼
+ 005 fidelity   006 classical  009 synth-    013 diffusion   (004 feeds all)
+ vs-detection   baseline       anomaly       AnoDDPM
+ study          │              (TRAIN)       (TRAIN)
+   │            │                              │
+   └────────────┴──► 007 paradigm comparison ◄─┘
+                     (Classical vs UNETR vs Diffusion)
+                                      │
+                                      ▼
                               010 visualization ─► 011 reporting/README
                                                           │
                                                           ▼
                                             012 multi-scale attention (stretch)
 ```
 
-Critical path: **000 → 001 → 002 → 003 → 004**. Then 005 / 006 / 009 run in parallel.
+Critical path: **000 → 001 → 002 → 003 → 004**. Then 005 / 006 / 009 / 013 run in parallel
+(009 and 013 are the two `/train`-gated specs). 007 is the headline three-paradigm table and
+depends on 005, 006, and 013.
 
 ## Index
 
@@ -33,13 +38,14 @@ Critical path: **000 → 001 → 002 → 003 → 004**. Then 005 / 006 / 009 run
 | [002](002-model-registry.md) | Model registry & checkpoint loading | no | approved |
 | [003](003-recon-engine.md) | Reconstruction & anomaly-map engine | no | approved |
 | [004](004-eval-harness.md) | Evaluation harness | no | approved |
-| [005](005-arch-loss-study.md) | Architecture × loss comparison study | no | approved |
+| [005](005-arch-loss-study.md) | Fidelity-vs-detection study (arch × loss + diffusion) | no | approved |
 | [006](006-classical-baseline.md) | Classical-ML baseline | no | approved |
-| [007](007-dl-vs-classical.md) | DL-vs-classical comparison | no | approved |
-| [009](009-synthetic-anomaly.md) | Synthetic-anomaly training | **YES** | approved |
+| [007](007-dl-vs-classical.md) | Paradigm comparison — Classical vs UNETR vs Diffusion | no | approved |
+| [009](009-synthetic-anomaly.md) | Synthetic-anomaly training (UNETR/FPI) | **YES** | approved |
 | [010](010-visualization.md) | 3D visualization & demo video | no | approved |
 | [011](011-reporting.md) | Reporting & public artifact | no | approved |
 | [012](012-multiscale-attention.md) | Multi-scale attention variant | **YES** | stretch |
+| [013](013-diffusion-anomaly.md) | Diffusion-based anomaly detection (AnoDDPM) | **YES** | draft |
 
 ## There is no Spec 008
 

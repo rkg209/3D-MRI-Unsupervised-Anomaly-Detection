@@ -11,7 +11,9 @@
 The prior work listed multi-scale attention as future work. Anomalies span scales — a small lesion
 and a large mass need different receptive fields — so attention over multiple scales *might*
 improve localization. This is explicitly **off the critical path**: it is an architectural
-experiment, and the project is defensible without it.
+experiment, and the project is defensible without it. Note that the diffusion model (Spec 013) now
+occupies the headline "third paradigm" novelty slot alongside synthetic-anomaly training (009);
+this stretch spec remains an optional architectural add-on, not a comparison member.
 
 ## Contract
 
