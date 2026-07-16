@@ -26,14 +26,12 @@ from omegaconf import DictConfig, OmegaConf  # noqa: E402
 from mri_ad.data.datasets import BraTSDataset  # noqa: E402
 from mri_ad.eval.metrics import MetricsComputer  # noqa: E402
 from mri_ad.exceptions import DataError  # noqa: E402
+from mri_ad.models import build_default_registry  # noqa: E402
 from mri_ad.utils import DeviceManager, RunLogger, seed_everything  # noqa: E402
 
 
 def _instantiate(node: DictConfig) -> Any:
-    """Build an object from a ``{target, params}`` config node.
-
-    # Spec 000 provisional — Spec 002's model registry replaces this manual dispatch.
-    """
+    """Build a non-model object from a ``{target, params}`` config node (e.g. the threshold)."""
     module_path, _, cls_name = str(node.target).rpartition(".")
     cls = getattr(importlib.import_module(module_path), cls_name)
     params = OmegaConf.to_container(node.get("params", {}), resolve=True) or {}
@@ -87,8 +85,9 @@ def main(cfg: DictConfig) -> None:
     with RunLogger(cfg) as run:
         device = DeviceManager.get_device(cfg.device)
 
-        model = _instantiate(cfg.model)
-        model.load_checkpoint(cfg.model.checkpoint)
+        registry = build_default_registry()
+        model = registry.get(cfg.model.name)
+        model.load_checkpoint(registry.checkpoint_path(cfg.model.name))
         model.to(device).eval()
 
         threshold = _instantiate(cfg.threshold)

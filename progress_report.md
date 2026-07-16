@@ -423,3 +423,91 @@ fixtures, reproducing the same reassembled-shape/Dice-in-range behavior as befor
 owns the `training=True` augmentation extension point left un-implemented in `build_transforms`;
 Spec 004 (eval harness) consumes `SplitContract` + `build_dataloader` to run the full test-split
 evaluation this spec's chunk-level `volume_index`/`chunk_index` contract was built for.
+
+## 006 · Implemented Spec 002 — model registry & checkpoint loading
+**Date:** 2026-07-16 · **Spec:** 002 · **Status:** done (implementation only — not run locally, see Problems hit)
+
+### What
+Put UNet, Attention-UNet, UNETR, and the new AnoDDPM diffusion model behind one config-driven
+`ModelRegistry`, and extracted the checkpoint-loading logic (LFS-stub detection, dual-layout
+unwrap, `strict=True`) into a single shared helper so it exists in exactly one place. New:
+`models/_checkpoint.py` (`load_checked_state_dict`), `models/unet.py` (`UNetModel`),
+`models/attention_unet.py` (`AttentionUNetModel`), `models/diffusion.py` (`DiffusionADModel`),
+`models/registry.py` (`ModelRegistry`, `build_default_registry`), `configs/model/diffusion.yaml`,
+`tests/test_models.py`, `tests/test_model_boundary.py`. Modified: `models/unetr.py` (routes
+`load_checkpoint` through the shared helper, dropped its now-duplicated `_LFS_MAGIC`),
+`models/__init__.py` (exports the registry + all four model classes), `scripts/run_slice.py`
+(replaced `_instantiate(cfg.model)` with `build_default_registry().get(cfg.model.name)`).
+
+### How
+- **Wrapper models load into the inner net, not `self`** (design decision #2). `UNetModel` and
+  `AttentionUNetModel` hold `self.net = UNet(...)` / `AttentionUnet(...)`; the legacy checkpoints
+  were saved from the bare MONAI class, so `load_checked_state_dict(self.net, path)` is what makes
+  the unprefixed keys match under `strict=True`. `UNETRReconstruction` is not a wrapper (its own
+  keys already match the ported legacy class), so it loads into `self` directly.
+- **`ModelRegistry` is config-driven and dynamic** (design decision #3): `build_default_registry()`
+  globs `configs/model/*.yaml`, dynamically imports each YAML's `target` dotted path, and calls
+  `register(name, cls)`. The registry module itself never imports a concrete model class — enforced
+  by `tests/test_model_boundary.py`, an AST-walk over `models/*.py` asserting none of them import
+  `mri_ad.recon`/`eval`/`classical`/`synth`/`viz` (acceptance test 8).
+  `register()` validates via `issubclass(cls, AnomalyDetectionModel)` and an empty
+  `cls.__abstractmethods__` (design decision #4) — no hand-listed method names, so it stays correct
+  as the interface evolves.
+- **Standalone YAML interpolation**: a model YAML's `checkpoint: ${paths.checkpoint_root}/...` only
+  resolves inside a full Hydra compose. `ModelRegistry.add_from_yaml` merges each YAML onto a small
+  `_BASE_PATHS_CFG` that mirrors `configs/config.yaml`'s own `${oc.env:MRI_AD_CHECKPOINTS,./checkpoints}`
+  default, so `checkpoint_path(name)` resolves correctly even when the registry is built outside
+  `run_slice.py`'s Hydra context (e.g. in a test or a future `eval`/`train` script).
+- **`DiffusionADModel`** wraps `monai.networks.nets.DiffusionModelUNet` + `DDPMScheduler` (both
+  present in the pinned `monai==1.6.0`, no dependency bump needed). `forward` noises the input to
+  `t_noise` via `scheduler.add_noise`, then runs the reverse loop `t_noise -> 0` calling
+  `net(sample, t)` then `scheduler.step`, returning the healthy-estimate sample — the AnoDDPM
+  partial-noise-then-denoise recipe. Per spec, its `load_checkpoint` always raises `CheckpointError`
+  today (routed through the same shared helper into `self.net`) since Spec 013 hasn't trained
+  weights yet; the loader is otherwise ready the moment a checkpoint lands.
+  `configs/model/diffusion.yaml` documents every hyperparameter as provisional, pointing at Spec
+  013's `/plan` for final values.
+
+### Problems hit
+1. **The formatter-on-save hook stripped `load_checked_state_dict`/`build_default_registry` imports
+   as "unused" three separate times** — once in `unetr.py`, once in `run_slice.py` — because it fired
+   in the gap between an edit that added the import and a following edit that added the usage. Each
+   time `ruff check` caught the resulting `NameError`/`F821` immediately; re-added the import as a
+   single edit alongside its usage each time. Noting this again (it also happened during Spec 001)
+   since it keeps recurring with this multi-step edit pattern.
+2. **`monai.networks.nets.AttentionUnet` has an internal `nn.Sigmoid()`** inside its attention-gate
+   submodule (`AttentionBlock.psi`), unrelated to the network's output head. A first draft of the
+   "AttUNet output isn't bounded" test walked `model.modules()` for any `Sigmoid` instance and failed
+   on this false positive. Rewrote the test to instead assert `AttentionUNetModel.forward(x) ==
+   self.net(x)` bit-for-bit — i.e. the wrapper appends no activation on top of whatever the net does
+   — rather than asserting anything about the net's internal structure.
+3. **`DiffusionModelUNet` requires every `channels` entry to be a multiple of `norm_num_groups`**
+   (default 32) — not documented in the plan. Added `norm_num_groups` as an explicit constructor
+   param (default 32, matching the real config's `channels=(32,64,64)`) so a downsized test model
+   can set both together (e.g. `channels=(4,8)`, `norm_num_groups=4`).
+4. **Full-resolution `(1,16,128,128)` forward passes are far too slow on this machine to run inline
+   in tests or via ad-hoc verification** — a single `DiffusionModelUNet` forward call at real
+   resolution took ~75s with no GPU, and running the full `tests/test_models.py` suite (which forwards
+   every model at real resolution, plus the diffusion reverse-denoise loop) hung the user's laptop for
+   ~30 minutes before it was killed. **This spec's code was written and statically verified
+   (`py_compile`, `ruff check`, `ruff format --check`) but was never executed locally past small
+   isolated single-call sanity checks** (confirmed UNet/AttUNet/UNETR forward fast in isolation; the
+   diffusion model is the slow one). Per explicit user instruction, no further local execution of
+   real-shape model code will happen — `tests/test_models.py` is written to spec (shrinks the
+   diffusion fixture to `t_noise=0`/tiny channels per the plan's own risk note) but must be run for
+   the first time on the GPU cluster, not this laptop. Saved as a standing memory
+   (`feedback_no_heavy_local_runs`) so this isn't repeated.
+
+### Result
+Implementation complete and statically verified: `py_compile` clean on every new/modified file,
+`ruff check` and `ruff format --check` clean. **Not yet run as a test suite** — `tests/test_models.py`
+and `tests/test_model_boundary.py` need their first real run on the GPU cluster (or at minimum a
+machine that can forward-pass `DiffusionModelUNet` at full resolution without hanging), per Problem
+4 above. `git diff --stat` touches only `models/`, `configs/model/diffusion.yaml`,
+`scripts/run_slice.py`, and `tests/` — no lines in `recon/`, `eval/`, `classical/` (verified by
+inspection, matching what `test_model_boundary.py` asserts). `torch-reviewer` has not yet been run on
+this diff (deferred to when tests can actually execute).
+
+**Next:** Run `tests/test_models.py`/`tests/test_model_boundary.py` and `torch-reviewer` on the GPU
+cluster/CI before merge. Spec 013 replaces `DiffusionADModel`'s placeholder hyperparameters with
+trained ones and Spec 009 trains the UNETR/FPI synthetic-anomaly variant onto this same registry.

@@ -1,0 +1,24 @@
+# AnoDDPM — the diffusion paradigm (headline, Spec 013). See specs/002-model-registry.md.
+#
+# PROVISIONAL: this spec only proves the shape/interface contract on a random-init net.
+# channels / attention_levels / num_train_timesteps / t_noise / scheduler choice are all
+# placeholders — Spec 013's /plan finalizes them from the AnoDDPM literature and a real
+# training run. There is no checkpoint yet: load_checkpoint always raises CheckpointError
+# until Spec 013 trains one.
+
+name: diffusion
+target: mri_ad.models.diffusion.DiffusionADModel
+
+params:
+  spatial_dims: 3
+  in_channels: 1
+  out_channels: 1
+  num_res_blocks: [1, 1, 2]
+  channels: [32, 64, 64]
+  attention_levels: [false, false, true]
+  norm_num_groups: 32 # each `channels` entry must be a multiple of this (DiffusionModelUNet constraint)
+  num_head_channels: 8
+  num_train_timesteps: 1000
+  t_noise: 250 # AnoDDPM-style partial noise, not full forward diffusion
+
+checkpoint: ${paths.checkpoint_root}/diffusion.pth

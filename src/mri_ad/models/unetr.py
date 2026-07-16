@@ -16,18 +16,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import torch
 from monai.networks.blocks import UnetrBasicBlock, UnetrPrUpBlock, UnetrUpBlock
 from monai.networks.nets import ViT
 from torch import Tensor, nn
 
 from mri_ad import VOLUME_SHAPE
-from mri_ad.exceptions import CheckpointError
+from mri_ad.models._checkpoint import load_checked_state_dict
 from mri_ad.models.base import AnomalyDetectionModel, ModelCard
-
-# First bytes of a Git-LFS pointer stub. The inherited legacy .pth files are 133-byte stubs,
-# not weights; loading one must fail loudly rather than degrade to random init.
-_LFS_MAGIC = b"version https://git-lfs.github.com/spec/v1"
 
 
 class UNETRReconstruction(AnomalyDetectionModel):
@@ -186,27 +181,10 @@ class UNETRReconstruction(AnomalyDetectionModel):
 
         Accepts a bare ``state_dict`` and a ``{"model_state_dict": ...}`` wrapper — both exist
         among the real weights. Raises :class:`CheckpointError` (never falls back to
-        ``strict=False``) on a missing file, a Git-LFS stub, or a key mismatch.
+        ``strict=False``) on a missing file, a Git-LFS stub, or a key mismatch. This model is
+        not a wrapper (its keys already match the checkpoint), so it loads into ``self``.
         """
-        path = Path(path)
-        if not path.is_file():
-            raise CheckpointError(f"Checkpoint not found: {path.name}")
-        with path.open("rb") as fh:
-            if fh.read(len(_LFS_MAGIC)) == _LFS_MAGIC:
-                raise CheckpointError(
-                    f"Checkpoint {path.name} is a Git-LFS pointer stub, not real weights "
-                    f"({path.stat().st_size} bytes). Fetch the real file (see README)."
-                )
-        loaded = torch.load(path, map_location="cpu")
-        state = (
-            loaded["model_state_dict"]
-            if isinstance(loaded, dict) and "model_state_dict" in loaded
-            else loaded
-        )
-        try:
-            self.load_state_dict(state, strict=True)
-        except RuntimeError as err:
-            raise CheckpointError(f"State-dict mismatch loading {path.name}: {err}") from err
+        load_checked_state_dict(self, path)
 
     @property
     def model_card(self) -> ModelCard:
