@@ -36,3 +36,8 @@ htmlcov/
 
 # ── Claude Code (development tool — not part of the project)
 .claude/
+planning/
+specs/
+3d-mri-anomaly-detection-sdd-plan.md
+CLAUDE.md
+progress_report.md
