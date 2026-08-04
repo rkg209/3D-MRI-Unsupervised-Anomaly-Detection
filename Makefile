@@ -1,4 +1,4 @@
-.PHONY: help install slice train eval report classical demo test lint check-data
+.PHONY: help install slice sweep train eval report classical demo test lint check-data
 .DEFAULT_GOAL := help
 
 # Hydra overrides, e.g.: make eval HYDRA_OVERRIDES="+experiment=cluster model=unetr"
@@ -17,6 +17,10 @@ check-data:  ## Verify data/ and checkpoints/ hold REAL files (not LFS stubs). R
 
 slice:  ## Spec 000: one checkpoint, one volume -> Dice + figure
 	$(PY) scripts/run_slice.py $(HYDRA_OVERRIDES)
+
+# GPU-SPENDING. Manual invoke only. e.g. make sweep HYDRA_OVERRIDES="+experiment=cluster model=unetr"
+sweep:  ## Spec 003: Dice-vs-threshold sweep on the VALIDATION split. MANUAL ONLY.
+	$(PY) scripts/run_sweep.py $(HYDRA_OVERRIDES)
 
 eval:  ## Full test-split evaluation from saved checkpoints (GPU preferred)
 	$(PY) scripts/run_eval.py $(HYDRA_OVERRIDES)

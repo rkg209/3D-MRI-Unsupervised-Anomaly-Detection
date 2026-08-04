@@ -22,6 +22,10 @@ brats:
   binarize_label: true
   label_interpolation: nearest
 
+# null = use the full split; an int caps the number of volumes (e.g. for a quick cluster smoke
+# run of the sweep). Referenced by cluster/laptop experiment configs.
+eval_subset: null
+
 preprocess:
   normalize: minmax # to [0, 1]
   eps: 1.0e-8

@@ -1,0 +1,9 @@
+# Residual -> binary anomaly mask. See specs/003-recon-engine.md.
+#
+# The strategy that actually reproduces the prior work: a hardcoded global `residual > 0.1`.
+# Unlike the percentile strategy, the flagged-voxel count varies with how badly the model
+# reconstructs a given volume — which is the real anomaly signal, not a fixed 5% quota.
+name: absolute
+target: mri_ad.recon.threshold.AbsoluteThreshold
+params:
+  value: 0.1

@@ -68,6 +68,13 @@ class RunLogger:
         """Record scalar results (e.g. ``dice``) to be written into ``run_meta.json``."""
         self.metrics.update(metrics)
 
+    @property
+    def run_id(self) -> str:
+        """The unique run stamp (``run_dir``'s name), used to namespace persisted artifacts."""
+        if self.run_dir is None:
+            raise RuntimeError("run_id is only available inside the RunLogger context.")
+        return self.run_dir.name
+
     def __exit__(
         self,
         exc_type: type[BaseException] | None,

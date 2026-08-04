@@ -1,0 +1,8 @@
+# Residual -> binary anomaly mask. See specs/003-recon-engine.md.
+#
+# Data-driven cutoff via Otsu's method over the residual's own histogram. Handles unbounded
+# residuals correctly (only UNETR bounds its output to [0, 1]; UNet/AttUNet do not).
+name: otsu
+target: mri_ad.recon.threshold.OtsuThreshold
+params:
+  bins: 256

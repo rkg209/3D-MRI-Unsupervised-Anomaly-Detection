@@ -11,9 +11,7 @@ is replaced by Specs 001-004 as their abstractions land.
 
 from __future__ import annotations
 
-import importlib
 from pathlib import Path
-from typing import Any
 
 import hydra
 import matplotlib
@@ -21,21 +19,14 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import torch  # noqa: E402
-from omegaconf import DictConfig, OmegaConf  # noqa: E402
+from omegaconf import DictConfig  # noqa: E402
 
 from mri_ad.data.datasets import BraTSDataset  # noqa: E402
 from mri_ad.eval.metrics import MetricsComputer  # noqa: E402
 from mri_ad.exceptions import DataError  # noqa: E402
 from mri_ad.models import build_default_registry  # noqa: E402
+from mri_ad.recon import ReconstructionEngine  # noqa: E402
 from mri_ad.utils import DeviceManager, RunLogger, seed_everything  # noqa: E402
-
-
-def _instantiate(node: DictConfig) -> Any:
-    """Build a non-model object from a ``{target, params}`` config node (e.g. the threshold)."""
-    module_path, _, cls_name = str(node.target).rpartition(".")
-    cls = getattr(importlib.import_module(module_path), cls_name)
-    params = OmegaConf.to_container(node.get("params", {}), resolve=True) or {}
-    return cls(**params)
 
 
 def _resolve_volume_id(brats_dir: Path, volume_id: str | None) -> str:
@@ -90,38 +81,21 @@ def main(cfg: DictConfig) -> None:
         model.load_checkpoint(registry.checkpoint_path(cfg.model.name))
         model.to(device).eval()
 
-        threshold = _instantiate(cfg.threshold)
-
         brats_dir = Path(str(cfg.data.brats.dir))
         if not brats_dir.is_dir():
             raise DataError(f"BraTS directory not present: {brats_dir.name}.")
         volume_id = _resolve_volume_id(brats_dir, cfg.slice.volume_id)
         dataset = BraTSDataset(cfg, [volume_id])
 
-        image_chunks = []
-        label_chunks = []
-        recon_chunks = []
-        residual_chunks = []
-        with torch.no_grad():
-            for i in range(len(dataset)):
-                item = dataset[i]
-                chunk = item["image"]
-                image_chunks.append(chunk)
-                label_chunks.append(item["label"])
-                x = chunk.unsqueeze(0).to(device)  # (1, 1, 16, 128, 128)
-                recon = model(x).squeeze(0).cpu()  # (1, 16, 128, 128)
-                recon_chunks.append(recon)
-                residual_chunks.append((chunk - recon).abs())
+        engine = ReconstructionEngine(model, cfg)
+        result = engine.run_dataset_volume(dataset, volume_index=0)
 
-        # Reassemble ALL chunks to full depth (prior-work bug #2: score the whole volume, not
-        # one chunk). Each chunk is (1, 16, 128, 128); cat along depth (dim=1) -> (1, D, 128, 128),
-        # drop the channel -> (D, 128, 128).
-        original = torch.cat(image_chunks, dim=1).squeeze(0)
-        reconstruction = torch.cat(recon_chunks, dim=1).squeeze(0)
-        residual = torch.cat(residual_chunks, dim=1).squeeze(0)
-        gt = torch.cat(label_chunks, dim=1).squeeze(0)
-
-        mask = threshold(residual)  # over the whole volume
+        # Drop the channel dim (1, D, 128, 128) -> (D, 128, 128) for Dice and the figure.
+        original = result.original.squeeze(0)
+        reconstruction = result.reconstruction.squeeze(0)
+        residual = result.residual.squeeze(0)
+        mask = result.anomaly_mask.squeeze(0)
+        gt = result.ground_truth.squeeze(0)
 
         dice = MetricsComputer.dice(mask, gt)
         assert 0.0 <= dice <= 1.0, f"Dice out of range: {dice}"

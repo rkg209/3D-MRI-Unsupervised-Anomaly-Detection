@@ -28,3 +28,9 @@ device: auto  # auto -> cuda, else mps, else cpu
 # Spec 000 vertical slice. volume_id: null -> use the first sorted BraTS subject.
 slice:
   volume_id: null
+
+# Spec 003: the reconstruction engine.
+recon:
+  save_results: true  # false lets a cluster sweep stream in-memory (no ~63MB/volume writes)
+  batch_size: 4        # chunks per forward-pass batch
+  results_dir: ${paths.artifact_root}/results/recon
