@@ -23,11 +23,12 @@ from mri_ad.utils.run_logger import RunLogger
 def main(cfg: DictConfig) -> None:
     """Read ``artifacts/metrics/{per_volume.csv,aggregate.json}`` and regenerate the report."""
     with RunLogger(cfg) as run:
-        # Must match run_eval.py's per-model namespacing (`make eval` writes under
-        # metrics_dir/<model>/, figures_dir/<model>/) — pass model=<name> to report on a
-        # different architecture than the config default.
-        metrics_dir = Path(str(cfg.eval.metrics_dir)) / str(cfg.model.name)
-        figures_dir = Path(str(cfg.eval.figures_dir)) / str(cfg.model.name)
+        # Must match run_eval.py's per-cell namespacing (`make eval` writes under
+        # metrics_dir/<cell_id>/, figures_dir/<cell_id>/, cell_id = f"{model}__{loss}") — pass
+        # model=<name> loss=<name> to report on a different cell than the config default.
+        cell_id = f"{cfg.model.name}__{cfg.loss.name}"
+        metrics_dir = Path(str(cfg.eval.metrics_dir)) / cell_id
+        figures_dir = Path(str(cfg.eval.figures_dir)) / cell_id
         generator = ReportGenerator(metrics_dir, figures_dir)
 
         # read_aggregate/read_per_volume already raise ArtifactError with a

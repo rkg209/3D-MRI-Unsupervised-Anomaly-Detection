@@ -11,6 +11,10 @@
 # Generated recon tensors are large; figures/tables under artifacts/ ARE committed.
 artifacts/results/recon/
 
+# Hydra's default per-run CWD (config.path not overridden anywhere) — pure run litter,
+# distinct from the project's own artifacts/runs/ provenance directory (RunLogger).
+/outputs/
+
 # ── Python
 __pycache__/
 *.py[cod]

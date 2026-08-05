@@ -57,6 +57,7 @@ def _cfg(tmp_path: Path, results_dir: Path, run_id: str) -> OmegaConf:
             "deterministic": True,
             "device": "cpu",
             "model": {"name": "stub"},
+            "loss": {"name": "mse"},
             "recon": {"results_dir": str(results_dir)},
             "eval": {
                 "legacy_compat": False,
@@ -91,14 +92,17 @@ def _make_results(tmp_path: Path, run_id: str = "run-a", n: int = 2) -> Path:
     return root
 
 
-def _write_manifest(results_dir: Path, run_id: str, *, model: str, split: str) -> None:
+def _write_manifest(
+    results_dir: Path, run_id: str, *, model: str, split: str, loss: str | None = "mse"
+) -> None:
     import json
 
     from mri_ad.eval.loader import MANIFEST_FILENAME
 
-    (results_dir / run_id / MANIFEST_FILENAME).write_text(
-        json.dumps({"model": model, "split": split, "n_volumes": 2}, indent=2)
-    )
+    payload = {"model": model, "split": split, "n_volumes": 2}
+    if loss is not None:
+        payload["loss"] = loss
+    (results_dir / run_id / MANIFEST_FILENAME).write_text(json.dumps(payload, indent=2))
 
 
 # ── manifest provenance guard: refuse a val-split or wrong-model results directory ─────────────
@@ -123,6 +127,30 @@ def test_evaluate_normal_refuses_a_wrong_model_manifest(tmp_path: Path) -> None:
     _write_manifest(root, "run-a", model="unet", split="test")
     cfg = _cfg(tmp_path, root, "run-a")  # cfg.model.name == "stub"
     with pytest.raises(ArtifactError, match="unet"):
+        _evaluate_normal(cfg, run_id="test")
+
+
+def test_evaluate_normal_refuses_a_manifest_with_no_loss(tmp_path: Path) -> None:
+    from scripts.run_eval import _evaluate_normal
+
+    from mri_ad.exceptions import ArtifactError
+
+    root = _make_results(tmp_path, run_id="run-a")
+    _write_manifest(root, "run-a", model="stub", split="test", loss=None)  # pre-Spec-005 shape
+    cfg = _cfg(tmp_path, root, "run-a")
+    with pytest.raises(ArtifactError, match="loss"):
+        _evaluate_normal(cfg, run_id="test")
+
+
+def test_evaluate_normal_refuses_a_wrong_loss_manifest(tmp_path: Path) -> None:
+    from scripts.run_eval import _evaluate_normal
+
+    from mri_ad.exceptions import ArtifactError
+
+    root = _make_results(tmp_path, run_id="run-a")
+    _write_manifest(root, "run-a", model="stub", split="test", loss="ssim")
+    cfg = _cfg(tmp_path, root, "run-a")  # cfg.loss.name == "mse"
+    with pytest.raises(ArtifactError, match="ssim"):
         _evaluate_normal(cfg, run_id="test")
 
 
@@ -224,6 +252,35 @@ def test_execing_run_report_as_a_module_leaves_no_ml_module_in_sys_modules() -> 
     assert out.stdout.strip() == "LEAKED:", out.stdout
 
 
+# ── Spec 005: mri_ad.eval.matrix / run_arch_loss_matrix.py stay in the report-safe subgraph ────
+def test_importing_eval_matrix_leaves_no_ml_module_in_sys_modules() -> None:
+    code = (
+        "import sys\n"
+        "import mri_ad.eval.matrix\n"
+        f"leaked = {sorted(FORBIDDEN_ML_MODULES)!r}\n"
+        "hit = [m for m in leaked if m in sys.modules]\n"
+        "print('LEAKED:' + ','.join(hit))\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO, capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "LEAKED:", out.stdout
+
+
+def test_execing_run_arch_loss_matrix_as_a_module_leaves_no_ml_module_in_sys_modules() -> None:
+    code = (
+        "import runpy, sys\n"
+        "runpy.run_path('scripts/run_arch_loss_matrix.py', run_name='not_main')\n"
+        f"leaked = {sorted(FORBIDDEN_ML_MODULES)!r}\n"
+        "hit = [m for m in leaked if m in sys.modules]\n"
+        "print('LEAKED:' + ','.join(hit))\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO, capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "LEAKED:", out.stdout
+
+
 def test_report_generation_finishes_well_under_the_two_minute_budget(tmp_path: Path) -> None:
     from mri_ad.eval.report import ReportGenerator
 
@@ -252,7 +309,9 @@ def test_report_generation_finishes_well_under_the_two_minute_budget(tmp_path: P
     generator = ReportGenerator(tmp_path / "metrics", tmp_path / "figures")
     start = time.monotonic()
     generator.write_per_volume(rows)
-    generator.write_aggregate(aggregate, mode="normal", model="unetr", split="test", n_volumes=250)
+    generator.write_aggregate(
+        aggregate, mode="normal", model="unetr", loss="mse_ssim", split="test", n_volumes=250
+    )
     generator.plot_dice_distribution(rows)
     generator.write_summary_markdown()
     elapsed = time.monotonic() - start

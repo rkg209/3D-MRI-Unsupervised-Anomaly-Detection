@@ -5,6 +5,7 @@ defaults:
   - loss: mse_ssim
   - threshold: percentile
   - eval: default
+  - matrix: arch_loss
   - _self_
 
 # Reproducibility spine (Spec 000). Every entry point calls seed_everything(seed) first.

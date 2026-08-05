@@ -66,13 +66,19 @@ def main(cfg: DictConfig) -> None:
 
         # run_sweep.py persists val-split results under this same results_dir root with no other
         # record of which split produced a run directory — this manifest is what lets `make eval`
-        # refuse to silently score a val-split (or wrong-model) run as if it were test.
-        manifest = {"model": str(cfg.model.name), "split": "test", "n_volumes": len(test_ids)}
+        # refuse to silently score a val-split (or wrong-model/wrong-loss) run as if it belonged
+        # to a different cell (Spec 005 D-A: loss added alongside model).
+        manifest = {
+            "model": str(cfg.model.name),
+            "loss": str(cfg.loss.name),
+            "split": "test",
+            "n_volumes": len(test_ids),
+        }
         (results_dir / run.run_id / MANIFEST_FILENAME).write_text(
             json.dumps(manifest, indent=2, sort_keys=True)
         )
 
-        run.record(model=cfg.model.name, split="test", n_volumes=len(test_ids))
+        run.record(model=cfg.model.name, loss=cfg.loss.name, split="test", n_volumes=len(test_ids))
         print(run.run_id)
 
 

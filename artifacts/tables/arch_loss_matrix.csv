@@ -1,0 +1,9 @@
+cell_id,model,loss,role,dice,iou,psnr_db,ssim,na_reason,metrics_path,eval_run_id,recon_run_id,n_volumes
+unetr__mse,unetr,mse,headline,n/a (no checkpoint),n/a (no checkpoint),n/a (no checkpoint),n/a (no checkpoint),no checkpoint,,,,
+unetr__ssim,unetr,ssim,headline,n/a (no checkpoint),n/a (no checkpoint),n/a (no checkpoint),n/a (no checkpoint),no checkpoint,,,,
+unetr__mse_ssim,unetr,mse_ssim,headline,n/a (not evaluated),n/a (not evaluated),n/a (not evaluated),n/a (not evaluated),not evaluated,,,,
+unetr__multiscale_mse,unetr,multiscale_mse,headline,n/a (no checkpoint),n/a (no checkpoint),n/a (no checkpoint),n/a (no checkpoint),no checkpoint,,,,
+unetr__perceptual,unetr,perceptual,headline,"n/a (no training code, no checkpoint)","n/a (no training code, no checkpoint)","n/a (no training code, no checkpoint)","n/a (no training code, no checkpoint)","no training code, no checkpoint",,,,
+unet__mse,unet,mse,reference,n/a (not evaluated),n/a (not evaluated),n/a (not evaluated),n/a (not evaluated),not evaluated,,,,
+attention_unet__mse_ssim,attention_unet,mse_ssim,reference,n/a (not evaluated),n/a (not evaluated),n/a (not evaluated),n/a (not evaluated),not evaluated,,,,
+diffusion__ddpm,diffusion,ddpm,paradigm,n/a (untrained),n/a (untrained),n/a (untrained),n/a (untrained),untrained,,,,

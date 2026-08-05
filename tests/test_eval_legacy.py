@@ -4,7 +4,7 @@ The deterministic mechanics (preprocessing, metric formulas, single-subject accu
 wiring) need no real model or data and are tested here on synthetic seeded tensors + a
 ``_StubModel``. The ±0.02-of-0.6255 assertion against real weights/BraTS is the one criterion not
 verifiable on a laptop (R2) — see the skip-marked test at the bottom, which reads
-``artifacts/metrics/legacy_compat.json`` when present.
+``artifacts/metrics/<cell_id>/legacy_compat.json`` when present.
 """
 
 from __future__ import annotations
@@ -230,7 +230,9 @@ def test_no_python_source_reads_the_legacy_bug_compat_environment_variable() -> 
 
 # ── The one criterion not verifiable on a laptop (R2) ───────────────────────────────────────────
 def test_legacy_compat_lands_within_tolerance_of_the_published_dice() -> None:
-    path = REPO / "artifacts" / "metrics" / "legacy_compat.json"
+    # Namespaced by cell_id (Spec 005 D-A) since scripts/run_eval.py::_evaluate_legacy; the
+    # default config cell is unetr__mse_ssim (configs/config.yaml: model=unetr, loss=mse_ssim).
+    path = REPO / "artifacts" / "metrics" / "unetr__mse_ssim" / "legacy_compat.json"
     if not path.is_file():
         pytest.skip("legacy_compat.json not present — requires the cluster run (real weights).")
     import json

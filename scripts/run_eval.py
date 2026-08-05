@@ -45,11 +45,13 @@ def _per_volume_row(volume_metrics: Any) -> dict[str, object]:
 
 
 def _check_manifest(results_dir: Path, cfg: DictConfig) -> None:
-    """Refuse a results directory whose manifest says it isn't a test-split run for this model.
+    """Refuse a results directory whose manifest says it isn't a test-split run for this cell.
 
     The only guard against ``resolve_results_dir``'s newest-mtime fallback silently picking up a
     val-split ``run_sweep.py`` run (trap #5 wearing a new costume). A directory with no manifest
-    (hand-built, or written before this check existed) is allowed through as before.
+    (hand-built, or written before this check existed) is allowed through as before. The loss
+    check (Spec 005 D-A) stops a results dir produced under one loss from being scored as if it
+    belonged to a different cell.
     """
     manifest = read_manifest(results_dir)
     if manifest is None:
@@ -64,6 +66,18 @@ def _check_manifest(results_dir: Path, cfg: DictConfig) -> None:
             f"{results_dir} was produced by model {manifest.get('model')!r}, not "
             f"{cfg.model.name!r} (manifest.json). Pass +eval.results_run_id=<run_id> for the "
             "right model's `make recon` run, or set model=<the model that produced it>."
+        )
+    if "loss" not in manifest:
+        raise ArtifactError(
+            f"{results_dir}/manifest.json predates the (model x loss) cell namespacing and "
+            "records no loss. Re-run `make recon` for this cell; a pre-Spec-005 manifest "
+            f"cannot be attributed to {cfg.loss.name!r} after the fact."
+        )
+    if manifest["loss"] != str(cfg.loss.name):
+        raise ArtifactError(
+            f"{results_dir} was produced with loss {manifest['loss']!r}, not "
+            f"{cfg.loss.name!r} (manifest.json). Pass +eval.results_run_id=<run_id> for the "
+            "right cell's `make recon` run, or set loss=<the loss that produced it>."
         )
 
 
@@ -84,16 +98,20 @@ def _evaluate_normal(cfg: DictConfig, *, run_id: str) -> dict[str, float]:
     agg_payload = dataclasses.asdict(agg)
     agg_payload["published_dice"] = float(cfg.eval.legacy.published_dice)
 
-    # Namespaced by model so `make eval model=unet` cannot silently overwrite unetr's
-    # per_volume.csv/aggregate.json/summary.md — a real risk for a three-paradigm comparison.
-    metrics_dir = Path(str(cfg.eval.metrics_dir)) / str(cfg.model.name)
-    figures_dir = Path(str(cfg.eval.figures_dir)) / str(cfg.model.name)
+    # Namespaced by cell_id (Spec 005 D-A: f"{model}__{loss}") so `make eval model=unetr
+    # loss=mse` and `make eval model=unetr loss=mse_ssim` cannot silently overwrite each other's
+    # per_volume.csv/aggregate.json/summary.md — a real risk once the (model x loss) matrix
+    # exists.
+    cell_id = f"{cfg.model.name}__{cfg.loss.name}"
+    metrics_dir = Path(str(cfg.eval.metrics_dir)) / cell_id
+    figures_dir = Path(str(cfg.eval.figures_dir)) / cell_id
     generator = ReportGenerator(metrics_dir, figures_dir)
     generator.write_per_volume(rows)
     generator.write_aggregate(
         agg_payload,
         mode="normal",
         model=str(cfg.model.name),
+        loss=str(cfg.loss.name),
         split="test",
         n_volumes=agg.n_volumes,
         run_id=run_id,
@@ -139,11 +157,13 @@ def _evaluate_legacy(cfg: DictConfig, *, run_id: str) -> dict[str, float]:
     evaluator = LegacyCompatEvaluator(model, legacy_cfg, device)
     result = evaluator.evaluate_directory(Path(str(cfg.data.brats.dir)))
 
-    metrics_dir = Path(str(cfg.eval.metrics_dir))
+    cell_id = f"{cfg.model.name}__{cfg.loss.name}"
+    metrics_dir = Path(str(cfg.eval.metrics_dir)) / cell_id
     metrics_dir.mkdir(parents=True, exist_ok=True)
     payload = dataclasses.asdict(result)
     payload["run_id"] = run_id
     payload["model"] = str(cfg.model.name)
+    payload["loss"] = str(cfg.loss.name)
     (metrics_dir / "legacy_compat.json").write_text(json.dumps(payload, indent=2, sort_keys=True))
 
     return {"legacy_dice": result.dice, "legacy_iou": result.iou}

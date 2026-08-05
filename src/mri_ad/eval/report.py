@@ -61,6 +61,7 @@ class ReportGenerator:
         *,
         mode: str,
         model: str,
+        loss: str,
         split: str,
         n_volumes: int,
         run_id: str | None = None,
@@ -72,6 +73,11 @@ class ReportGenerator:
         ``psnr_mean``/``psnr_std``/``ssim_mean``/``ssim_std`` plus ``published_dice`` (the
         number to diff against — sourced from ``configs/eval/default.yaml``, never hardcoded
         here). Raises :class:`ArtifactError` if a required key is missing.
+
+        ``loss`` is a **required keyword** (Spec 005 D-A) — a defaulted loss would let a cell be
+        written with the wrong label and never be noticed. ``model``/``loss`` together form the
+        ``cell_id`` (``f"{model}__{loss}"``) that namespaces this matrix cell in
+        ``artifacts/metrics/`` and ``artifacts/figures/``.
 
         ``run_id`` is the **eval** run that produced this file; ``results_run_id`` is the
         **recon** run whose persisted ``ReconResult``s were scored. They are different runs and
@@ -99,6 +105,8 @@ class ReportGenerator:
         payload = {
             "mode": mode,
             "model": model,
+            "loss": loss,
+            "cell_id": f"{model}__{loss}",
             "split": split,
             "n_volumes": n_volumes,
             "run_id": run_id,
@@ -162,8 +170,8 @@ class ReportGenerator:
         delta = agg["baseline_delta"]
 
         lines = [
-            f"# Evaluation summary — {agg['model']} ({agg['mode']}, split={agg['split']}, "
-            f"n={agg['n_volumes']})",
+            f"# Evaluation summary — {agg['model']}__{agg['loss']} ({agg['mode']}, "
+            f"split={agg['split']}, n={agg['n_volumes']})",
             "",
             "### Headline — Dice / IoU",
             "",

@@ -1,0 +1,26 @@
+# Spec 005 matrix declaration. Cells are (model x loss); a cell is real only if
+# artifacts/metrics/<model>__<loss>/aggregate.json exists. na_reason explains WHY a cell is
+# missing and is data, not prose invented in code.
+# metrics_root interpolates from eval.metrics_dir (not paths.artifact_root directly) so an
+# +experiment= override of one cannot silently point make matrix at an empty tree while make
+# eval keeps writing somewhere else (that would render every cell "not evaluated" in a way that
+# reads as an honest absence rather than the config drift it actually is).
+name: arch_loss
+metrics_root: ${eval.metrics_dir}
+tables_dir: ${paths.artifact_root}/tables
+basename: arch_loss_matrix
+
+cells:
+  # --- Headline: UNETR swept across losses (the core fidelity-vs-detection evidence) ---
+  - {model: unetr, loss: mse,            role: headline,  na_reason: "no checkpoint"}
+  - {model: unetr, loss: ssim,           role: headline,  na_reason: "no checkpoint"}
+  - {model: unetr, loss: mse_ssim,       role: headline,  na_reason: "not evaluated"}
+  - {model: unetr, loss: multiscale_mse, role: headline,  na_reason: "no checkpoint"}
+  - {model: unetr, loss: perceptual,     role: headline,  na_reason: "no training code, no checkpoint"}
+
+  # --- Prior-work reference rows: the anti-correlation is not a UNETR artefact ---
+  - {model: unet,           loss: mse,      role: reference, na_reason: "not evaluated"}
+  - {model: attention_unet, loss: mse_ssim, role: reference, na_reason: "not evaluated"}
+
+  # --- Paradigm row: does a generative prior escape the anti-correlation? ---
+  - {model: diffusion, loss: ddpm, role: paradigm, na_reason: "untrained"}

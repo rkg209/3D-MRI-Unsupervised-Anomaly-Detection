@@ -1,0 +1,222 @@
+{
+  "config": {
+    "data": {
+      "brats": {
+        "binarize_label": true,
+        "dir": "./data/brats/MICCAI_BraTS2020_TrainingData",
+        "label_interpolation": "nearest",
+        "modality": "t2"
+      },
+      "eval_subset": null,
+      "loader": {
+        "batch_size": 8,
+        "cache_rate": 0.0,
+        "num_workers": 4
+      },
+      "openbhb": {
+        "crop": {
+          "x": [
+            20,
+            196
+          ],
+          "y": [
+            20,
+            160
+          ],
+          "z": [
+            50,
+            130
+          ]
+        },
+        "dir": "./data/openbhb/val_quasiraw",
+        "max_volumes": null
+      },
+      "preprocess": {
+        "chunk_depth": 16,
+        "chunking": "deterministic",
+        "eps": 1e-08,
+        "normalize": "minmax",
+        "resize_mode": "trilinear"
+      },
+      "split": {
+        "brats": {
+          "test": 0.8,
+          "val": 0.2
+        },
+        "contract_path": "./artifacts/split_contract.json",
+        "openbhb": {
+          "train": 0.85,
+          "val": 0.15
+        }
+      }
+    },
+    "deterministic": true,
+    "device": "auto",
+    "eval": {
+      "figures_dir": "./artifacts/figures",
+      "labels_dir": null,
+      "legacy": {
+        "chunk_index": 4,
+        "crop_size": [
+          160,
+          130,
+          170
+        ],
+        "published_dice": 0.6255,
+        "published_iou": 0.4551,
+        "sort_subjects": true,
+        "subject_count": 100,
+        "threshold": 0.1,
+        "tolerance": 0.02
+      },
+      "legacy_compat": false,
+      "metrics_dir": "./artifacts/metrics",
+      "results_run_id": null
+    },
+    "loss": {
+      "name": "mse_ssim",
+      "params": {
+        "data_range": 1.0,
+        "mse_weight": 1.0,
+        "ssim_weight": 1.0
+      },
+      "target": "mri_ad.losses.SSIMMSELoss"
+    },
+    "matrix": {
+      "basename": "arch_loss_matrix",
+      "cells": [
+        {
+          "loss": "mse",
+          "model": "unetr",
+          "na_reason": "no checkpoint",
+          "role": "headline"
+        },
+        {
+          "loss": "ssim",
+          "model": "unetr",
+          "na_reason": "no checkpoint",
+          "role": "headline"
+        },
+        {
+          "loss": "mse_ssim",
+          "model": "unetr",
+          "na_reason": "not evaluated",
+          "role": "headline"
+        },
+        {
+          "loss": "multiscale_mse",
+          "model": "unetr",
+          "na_reason": "no checkpoint",
+          "role": "headline"
+        },
+        {
+          "loss": "perceptual",
+          "model": "unetr",
+          "na_reason": "no training code, no checkpoint",
+          "role": "headline"
+        },
+        {
+          "loss": "mse",
+          "model": "unet",
+          "na_reason": "not evaluated",
+          "role": "reference"
+        },
+        {
+          "loss": "mse_ssim",
+          "model": "attention_unet",
+          "na_reason": "not evaluated",
+          "role": "reference"
+        },
+        {
+          "loss": "ddpm",
+          "model": "diffusion",
+          "na_reason": "untrained",
+          "role": "paradigm"
+        }
+      ],
+      "metrics_root": "./artifacts/metrics",
+      "name": "arch_loss",
+      "tables_dir": "./artifacts/tables"
+    },
+    "model": {
+      "checkpoint": "./checkpoints/unetr_mse_ssim_aug.pth",
+      "name": "unetr",
+      "params": {
+        "conv_block": false,
+        "dropout_rate": 0.0,
+        "feature_size": 32,
+        "hidden_size": 768,
+        "img_size": [
+          16,
+          128,
+          128
+        ],
+        "in_channels": 1,
+        "mlp_dim": 3072,
+        "norm_name": "instance",
+        "num_heads": 12,
+        "num_layers": 12,
+        "patch_size": [
+          16,
+          16,
+          16
+        ],
+        "res_block": true
+      },
+      "target": "mri_ad.models.unetr.UNETRReconstruction"
+    },
+    "paths": {
+      "artifact_root": "./artifacts",
+      "checkpoint_root": "./checkpoints",
+      "data_root": "./data"
+    },
+    "recon": {
+      "batch_size": 4,
+      "results_dir": "./artifacts/results/recon",
+      "save_results": true
+    },
+    "seed": 42,
+    "shape": {
+      "channels": 1,
+      "depth": 16,
+      "height": 128,
+      "width": 128
+    },
+    "slice": {
+      "volume_id": null
+    },
+    "threshold": {
+      "name": "percentile",
+      "params": {
+        "percentile": 95.0
+      },
+      "sweep": {
+        "absolute": [
+          0.05,
+          0.1,
+          0.15,
+          0.2
+        ],
+        "percentiles": [
+          90.0,
+          92.5,
+          95.0,
+          97.5,
+          99.0
+        ]
+      },
+      "target": "mri_ad.recon.threshold.FixedPercentileThreshold"
+    }
+  },
+  "end_time": "2026-08-05T09:13:47.075989+00:00",
+  "git_dirty": true,
+  "git_sha": "4d8aa9c5aac7fd83d1e2d94563265235e60d0ad6",
+  "hostname": "Rahuls-MacBook-Air-10.local",
+  "metrics": {
+    "n_available": 0,
+    "n_cells": 8,
+    "spearman_psnr_dice": null
+  },
+  "seed": 42,
+  "start_time": "2026-08-05T09:13:47.074172+00:00"
+}

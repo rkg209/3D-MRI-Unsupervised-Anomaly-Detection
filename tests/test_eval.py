@@ -404,7 +404,12 @@ def test_per_volume_csv_and_aggregate_json_are_written_with_mean_and_std(tmp_pat
     gen = ReportGenerator(tmp_path / "metrics", tmp_path / "figures")
     csv_path = gen.write_per_volume(_volume_rows())
     json_path = gen.write_aggregate(
-        _aggregate_payload(), mode="normal", model="unetr", split="test", n_volumes=2
+        _aggregate_payload(),
+        mode="normal",
+        model="unetr",
+        loss="mse_ssim",
+        split="test",
+        n_volumes=2,
     )
 
     assert csv_path.is_file() and json_path.is_file()
@@ -421,7 +426,12 @@ def test_psnr_and_ssim_are_labelled_context_only_everywhere_they_appear(tmp_path
     gen = ReportGenerator(tmp_path / "metrics", tmp_path / "figures")
     gen.write_per_volume(_volume_rows())
     gen.write_aggregate(
-        _aggregate_payload(), mode="normal", model="unetr", split="test", n_volumes=2
+        _aggregate_payload(),
+        mode="normal",
+        model="unetr",
+        loss="mse_ssim",
+        split="test",
+        n_volumes=2,
     )
 
     header = list(csv.DictReader((tmp_path / "metrics" / "per_volume.csv").open()).fieldnames)
@@ -444,6 +454,7 @@ def test_aggregate_json_round_trips_through_the_report_reader(tmp_path: Path) ->
         _aggregate_payload(),
         mode="normal",
         model="unetr",
+        loss="mse_ssim",
         split="test",
         n_volumes=2,
         run_id="run-a",
@@ -457,14 +468,21 @@ def test_write_aggregate_raises_artifact_error_on_missing_key(tmp_path: Path) ->
     gen = ReportGenerator(tmp_path / "metrics", tmp_path / "figures")
     incomplete = {k: v for k, v in _aggregate_payload().items() if k != "published_dice"}
     with pytest.raises(ArtifactError):
-        gen.write_aggregate(incomplete, mode="normal", model="unetr", split="test", n_volumes=2)
+        gen.write_aggregate(
+            incomplete, mode="normal", model="unetr", loss="mse_ssim", split="test", n_volumes=2
+        )
 
 
 # ── Acceptance #7: aggregate.json records the delta from the published number ──────────────────
 def test_aggregate_json_records_the_delta_from_the_published_number(tmp_path: Path) -> None:
     gen = ReportGenerator(tmp_path / "metrics", tmp_path / "figures")
     gen.write_aggregate(
-        _aggregate_payload(), mode="normal", model="unetr", split="test", n_volumes=2
+        _aggregate_payload(),
+        mode="normal",
+        model="unetr",
+        loss="mse_ssim",
+        split="test",
+        n_volumes=2,
     )
     agg = gen.read_aggregate()
     delta = agg["baseline_delta"]
