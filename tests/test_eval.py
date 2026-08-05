@@ -410,6 +410,7 @@ def test_per_volume_csv_and_aggregate_json_are_written_with_mean_and_std(tmp_pat
         loss="mse_ssim",
         split="test",
         n_volumes=2,
+        split_hash="hash-test",
     )
 
     assert csv_path.is_file() and json_path.is_file()
@@ -432,6 +433,7 @@ def test_psnr_and_ssim_are_labelled_context_only_everywhere_they_appear(tmp_path
         loss="mse_ssim",
         split="test",
         n_volumes=2,
+        split_hash="hash-test",
     )
 
     header = list(csv.DictReader((tmp_path / "metrics" / "per_volume.csv").open()).fieldnames)
@@ -457,6 +459,7 @@ def test_aggregate_json_round_trips_through_the_report_reader(tmp_path: Path) ->
         loss="mse_ssim",
         split="test",
         n_volumes=2,
+        split_hash="hash-test",
         run_id="run-a",
     )
     agg = gen.read_aggregate()
@@ -469,7 +472,13 @@ def test_write_aggregate_raises_artifact_error_on_missing_key(tmp_path: Path) ->
     incomplete = {k: v for k, v in _aggregate_payload().items() if k != "published_dice"}
     with pytest.raises(ArtifactError):
         gen.write_aggregate(
-            incomplete, mode="normal", model="unetr", loss="mse_ssim", split="test", n_volumes=2
+            incomplete,
+            mode="normal",
+            model="unetr",
+            loss="mse_ssim",
+            split="test",
+            n_volumes=2,
+            split_hash="hash-test",
         )
 
 
@@ -483,6 +492,7 @@ def test_aggregate_json_records_the_delta_from_the_published_number(tmp_path: Pa
         loss="mse_ssim",
         split="test",
         n_volumes=2,
+        split_hash="hash-test",
     )
     agg = gen.read_aggregate()
     delta = agg["baseline_delta"]

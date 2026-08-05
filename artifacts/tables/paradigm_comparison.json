@@ -1,0 +1,58 @@
+{
+  "columns": [
+    {
+      "available": false,
+      "dice": null,
+      "iou": null,
+      "key": "classical",
+      "localizes": false,
+      "na_reason": "not run",
+      "operating_point": null,
+      "paradigm": "Classical",
+      "pr_auc": null,
+      "roc_auc": null,
+      "source_paths": []
+    },
+    {
+      "available": false,
+      "dice": null,
+      "iou": null,
+      "key": "unetr__mse_ssim",
+      "localizes": true,
+      "na_reason": "not evaluated",
+      "operating_point": null,
+      "paradigm": "UNETR",
+      "pr_auc": null,
+      "roc_auc": null,
+      "source_paths": []
+    },
+    {
+      "available": false,
+      "dice": null,
+      "iou": null,
+      "key": "diffusion__ddpm",
+      "localizes": true,
+      "na_reason": "untrained",
+      "operating_point": null,
+      "paradigm": "Diffusion (AnoDDPM)",
+      "pr_auc": null,
+      "roc_auc": null,
+      "source_paths": []
+    }
+  ],
+  "granularity_note": "Operating granularity is slice-level: each 2D axial slice is one sample. This does NOT localize an anomaly, so ROC-AUC here is NOT comparable to voxel-level Dice.",
+  "sample": {
+    "n_positive": null,
+    "n_slices": null,
+    "prevalence": null
+  },
+  "spec": "007",
+  "split_hash": null,
+  "stats": {
+    "best_dice_key": null,
+    "best_roc_auc_key": null,
+    "diffusion_available": false,
+    "n_available": 0,
+    "n_columns": 3
+  }
+}

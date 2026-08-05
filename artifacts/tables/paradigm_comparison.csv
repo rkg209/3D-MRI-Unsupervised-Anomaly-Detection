@@ -1,0 +1,4 @@
+key,paradigm,localizes,roc_auc,pr_auc,dice,iou,f1_at_tuned_threshold,na_reason,split_hash,n_slices
+classical,Classical,False,n/a (not run),n/a (not run),n/a (no localization),n/a (no localization),n/a (not run),not run,,
+unetr__mse_ssim,UNETR,True,n/a (not evaluated),n/a (not evaluated),n/a (not evaluated),n/a (not evaluated),n/a (not evaluated),not evaluated,,
+diffusion__ddpm,Diffusion (AnoDDPM),True,n/a (untrained),n/a (untrained),n/a (untrained),n/a (untrained),n/a (untrained),untrained,,

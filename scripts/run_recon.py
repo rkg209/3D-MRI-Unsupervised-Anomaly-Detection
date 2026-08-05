@@ -73,6 +73,7 @@ def main(cfg: DictConfig) -> None:
             "loss": str(cfg.loss.name),
             "split": "test",
             "n_volumes": len(test_ids),
+            "split_hash": contract.content_hash(),
         }
         (results_dir / run.run_id / MANIFEST_FILENAME).write_text(
             json.dumps(manifest, indent=2, sort_keys=True)

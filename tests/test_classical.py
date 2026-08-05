@@ -475,6 +475,25 @@ def test_feature_importance_is_mean_gain_across_folds() -> None:
     assert all(v > 0 for v in importance.values())
 
 
+# ── Spec 007: out-of-fold predictions are retained, not discarded ─────────────────────────────
+def test_oof_predictions_raises_before_cross_validate() -> None:
+    baseline = _stub_baseline(n_splits=3)
+    with pytest.raises(ClassicalError):
+        _ = baseline.oof_predictions
+
+
+def test_oof_predictions_cover_every_sample_exactly_once() -> None:
+    data = _synthetic_slice_dataset()
+    baseline = _stub_baseline(n_splits=3)
+    baseline.cross_validate(data)
+    rows = baseline.oof_predictions
+    assert len(rows) == len(data.y)
+    seen = {(r.volume_id, r.slice_index, r.fold) for r in rows}
+    assert len(seen) == len(rows)  # no held-out slice scored twice
+    assert all(r.granularity == "slice-level" for r in rows)
+    assert all(r.y_true in (0, 1) for r in rows)
+
+
 def test_importing_classical_does_not_require_xgboost(monkeypatch: pytest.MonkeyPatch) -> None:
     import sys
 
@@ -500,10 +519,27 @@ def _sample_metrics() -> object:
     )
 
 
+def _sample_oof_predictions() -> list:
+    from mri_ad.classical.baseline import OofPrediction
+
+    return [
+        OofPrediction(
+            granularity="slice-level",
+            fold=0,
+            volume_id="sub-0",
+            slice_index=i,
+            y_true=i % 2,
+            y_score=0.1 * i,
+        )
+        for i in range(4)
+    ]
+
+
 def _write_full_report(tmp_path) -> ClassicalReportGenerator:
     gen = ClassicalReportGenerator(tmp_path / "metrics", tmp_path / "figures")
     metrics = _sample_metrics()
     gen.write_per_fold(metrics)
+    gen.write_predictions(_sample_oof_predictions())
     gen.write_metrics_json(
         metrics,
         run_id="run-1",
@@ -535,6 +571,7 @@ def test_granularity_is_slice_level_end_to_end() -> None:
         "metrics_json_note",
         "feature_importance_csv",
         "summary_markdown",
+        "oof_predictions_csv",
     ],
 )
 def test_every_generated_artifact_records_granularity(tmp_path, check: str) -> None:
@@ -545,6 +582,13 @@ def test_every_generated_artifact_records_granularity(tmp_path, check: str) -> N
 
         with gen._per_fold_path.open() as fh:
             rows = list(csv.DictReader(fh))
+        assert all(row["granularity"] == "slice-level" for row in rows)
+    elif check == "oof_predictions_csv":
+        import csv
+
+        with gen._oof_predictions_path.open() as fh:
+            rows = list(csv.DictReader(fh))
+        assert rows
         assert all(row["granularity"] == "slice-level" for row in rows)
     elif check == "metrics_json_top_level":
         payload = gen.read_metrics_json()

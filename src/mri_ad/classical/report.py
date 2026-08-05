@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import csv
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from pathlib import Path
 
@@ -38,6 +38,7 @@ PER_FOLD_FIELDS = (
     "scale_pos_weight",
 )
 FEATURE_IMPORTANCE_FIELDS = ("granularity", "rank", "feature", "mean_gain")
+OOF_PREDICTION_FIELDS = ("granularity", "fold", "volume_id", "slice_index", "y_true", "y_score")
 BASELINES_NOTE = (
     "A majority-class classifier scores ROC-AUC 0.5 by construction; the honest PR-AUC floor is "
     "the positive rate — read PR-AUC against that floor, never against 0."
@@ -67,6 +68,25 @@ class ClassicalReportGenerator:
     @property
     def _summary_path(self) -> Path:
         return self.metrics_dir / "summary.md"
+
+    @property
+    def _oof_predictions_path(self) -> Path:
+        return self.metrics_dir / "oof_predictions.csv"
+
+    def write_predictions(self, rows: Sequence) -> Path:
+        """Write ``oof_predictions.csv`` — one row per held-out slice (Spec 007 acceptance 1/3).
+
+        ``rows`` is a sequence of :class:`~mri_ad.classical.baseline.OofPrediction`. Retained so
+        Spec 007's paradigm comparison can recompute the classical ROC/PR curve with the exact
+        same curve function every other column uses, rather than trusting a hand-summarized mean.
+        """
+        self.metrics_dir.mkdir(parents=True, exist_ok=True)
+        with self._oof_predictions_path.open("w", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(OOF_PREDICTION_FIELDS))
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(asdict(row))
+        return self._oof_predictions_path
 
     def write_per_fold(self, metrics: ClassicalMetrics) -> Path:
         """Write ``per_fold.csv`` — every row carries ``granularity`` (acceptance 6)."""
@@ -238,6 +258,7 @@ class ClassicalReportGenerator:
 __all__ = [
     "BASELINES_NOTE",
     "FEATURE_IMPORTANCE_FIELDS",
+    "OOF_PREDICTION_FIELDS",
     "PER_FOLD_FIELDS",
     "ClassicalReportGenerator",
 ]

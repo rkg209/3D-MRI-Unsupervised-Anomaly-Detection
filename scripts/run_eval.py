@@ -79,6 +79,12 @@ def _check_manifest(results_dir: Path, cfg: DictConfig) -> None:
             f"{cfg.loss.name!r} (manifest.json). Pass +eval.results_run_id=<run_id> for the "
             "right cell's `make recon` run, or set loss=<the loss that produced it>."
         )
+    if "split_hash" not in manifest:
+        raise ArtifactError(
+            f"{results_dir}/manifest.json predates split-hash stamping (Spec 007) and records "
+            "no split_hash. Re-run `make recon` — a pre-Spec-007 manifest cannot be attributed "
+            "to a split hash after the fact."
+        )
 
 
 def _evaluate_normal(cfg: DictConfig, *, run_id: str) -> dict[str, float]:
@@ -87,6 +93,12 @@ def _evaluate_normal(cfg: DictConfig, *, run_id: str) -> dict[str, float]:
         Path(str(cfg.recon.results_dir)), run_id=cfg.eval.get("results_run_id")
     )
     _check_manifest(results_dir, cfg)
+    manifest = read_manifest(results_dir)
+    if manifest is None:
+        raise ArtifactError(
+            f"{results_dir} has no manifest.json — Spec 007 needs its split_hash to assert the "
+            "paradigm comparison's same-sample invariant. Re-run `make recon`."
+        )
     labels_dir = cfg.eval.get("labels_dir")
     labels_dir = Path(str(labels_dir)) if labels_dir else None
 
@@ -114,6 +126,7 @@ def _evaluate_normal(cfg: DictConfig, *, run_id: str) -> dict[str, float]:
         loss=str(cfg.loss.name),
         split="test",
         n_volumes=agg.n_volumes,
+        split_hash=str(manifest["split_hash"]),
         run_id=run_id,
         results_run_id=results_dir.name,
     )

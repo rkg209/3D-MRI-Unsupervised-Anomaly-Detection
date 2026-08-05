@@ -1,0 +1,28 @@
+# Spec 007 — the headline three-paradigm comparison.
+# Columns are DATA, not code: adding Spec 013's diffusion row is a config edit (013 acceptance 2).
+tables_dir: ${paths.artifact_root}/tables
+figures_dir: ${paths.artifact_root}/figures
+basename: paradigm_comparison
+
+classical_metrics_dir: ${paths.artifact_root}/classical/metrics
+metrics_root: ${eval.metrics_dir}
+
+# The DL slice score. Declared here, BEFORE any result is looked at, so the choice of score can
+# never be a post-hoc selection. Changing it is a config edit with a progress_report.md note.
+score_field: flagged_fraction
+
+# The slice-level decision threshold. MUST come from a VALIDATION sweep
+# (`make slice-scores` on a val recon run -> tune -> a human edits this line). Never from test.
+# Left null, the operating-point row renders "n/a (threshold not tuned)". AUC rows are unaffected.
+slice_threshold: null
+threshold_grid: [0.005, 0.01, 0.02, 0.05, 0.1, 0.2]
+
+columns:
+  - key: classical
+    paradigm: Classical
+    localizes: false
+    na_reason: "not run"
+  - {key: unetr__mse_ssim, model: unetr, loss: mse_ssim, paradigm: UNETR,
+     localizes: true, na_reason: "not evaluated"}
+  - {key: diffusion__ddpm, model: diffusion, loss: ddpm, paradigm: "Diffusion (AnoDDPM)",
+     localizes: true, na_reason: "untrained"}

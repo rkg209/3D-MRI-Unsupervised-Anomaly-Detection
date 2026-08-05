@@ -64,6 +64,7 @@ def _aggregate(
         loss=loss,
         split="test",
         n_volumes=n_volumes,
+        split_hash="hash-test",
         run_id=run_id,
         results_run_id=results_run_id,
     )

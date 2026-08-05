@@ -1,4 +1,4 @@
-.PHONY: help install slice sweep recon train eval report classical demo test lint check-data matrix
+.PHONY: help install slice sweep recon train eval report classical demo test lint check-data matrix slice-scores paradigm
 .DEFAULT_GOAL := help
 
 # Hydra overrides, e.g.: make eval HYDRA_OVERRIDES="+experiment=cluster model=unetr"
@@ -43,6 +43,12 @@ report:  ## Regenerate all tables/plots/README scorecard from saved artifacts. N
 
 matrix:  ## Spec 005: render artifacts/tables/arch_loss_matrix.{csv,md,json}. No GPU.
 	$(PY) scripts/run_arch_loss_matrix.py $(HYDRA_OVERRIDES)
+
+slice-scores:  ## Spec 007: reduce one saved DL recon run to slice-level scores. No GPU (reads saved .pt).
+	$(PY) scripts/run_slice_reduction.py $(HYDRA_OVERRIDES)
+
+paradigm:  ## Spec 007: render the Classical vs UNETR vs Diffusion headline table. No GPU.
+	$(PY) scripts/run_paradigm_comparison.py $(HYDRA_OVERRIDES)
 
 demo:  ## Spec 010: export the demo video from a saved ReconResult
 	$(PY) scripts/run_demo.py $(HYDRA_OVERRIDES)

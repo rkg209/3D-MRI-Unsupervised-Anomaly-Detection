@@ -11,16 +11,40 @@ from __future__ import annotations
 
 import statistics
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
 
 from mri_ad.classical.dataset import SliceDataset
-from mri_ad.classical.metrics import ClassicalMetrics, FoldMetrics, aggregate_folds, binary_scores
+from mri_ad.classical.metrics import (
+    GRANULARITY,
+    ClassicalMetrics,
+    FoldMetrics,
+    aggregate_folds,
+    binary_scores,
+)
 from mri_ad.exceptions import ClassicalError
 
 EstimatorFactory = Callable[..., Any]
+
+
+@dataclass(frozen=True)
+class OofPrediction:
+    """One held-out slice's prediction from cross-validation (Spec 007 acceptance 1/3).
+
+    Retained so the classical baseline's ROC/PR curve can be recomputed by the same shared
+    curve function every other paradigm's column uses (``eval/curves.py``) — 006 only ever
+    published scalar per-fold means, which cannot render a curve.
+    """
+
+    granularity: str
+    fold: int
+    volume_id: str
+    slice_index: int
+    y_true: int
+    y_score: float
 
 
 class ClassicalBaseline:
@@ -36,6 +60,7 @@ class ClassicalBaseline:
         self.cfg = cfg
         self._estimator_factory = estimator_factory
         self._fold_importances: list[dict[str, float]] = []
+        self._oof_predictions: list[OofPrediction] = []
 
     def make_splits(self, data: SliceDataset) -> list[tuple[np.ndarray, np.ndarray]]:
         """``StratifiedGroupKFold`` splits, grouped by subject. Disjointness is asserted."""
@@ -81,6 +106,7 @@ class ClassicalBaseline:
         """Fit + score every fold. Returns aggregate metrics; one :class:`FoldMetrics` per fold."""
         splits = self.make_splits(data)
         self._fold_importances = []
+        self._oof_predictions = []
         folds: list[FoldMetrics] = []
 
         for fold, (train_idx, test_idx) in enumerate(splits):
@@ -91,6 +117,20 @@ class ClassicalBaseline:
             estimator.fit(data.X[train_idx], y_train)
             scores = np.asarray(estimator.predict_proba(data.X[test_idx]))[:, 1]
             roc_auc, pr_auc = binary_scores(y_test, scores)
+
+            test_groups = data.groups[test_idx]
+            test_slice_index = data.slice_index[test_idx]
+            for i, _idx in enumerate(test_idx):
+                self._oof_predictions.append(
+                    OofPrediction(
+                        granularity=GRANULARITY,
+                        fold=fold,
+                        volume_id=str(test_groups[i]),
+                        slice_index=int(test_slice_index[i]),
+                        y_true=int(y_test[i]),
+                        y_score=float(scores[i]),
+                    )
+                )
 
             positive_rate = float(y_test.mean())
             folds.append(
@@ -136,5 +176,12 @@ class ClassicalBaseline:
             for name in names
         }
 
+    @property
+    def oof_predictions(self) -> list[OofPrediction]:
+        """Out-of-fold predictions, one per held-out slice. Raises before :meth:`cross_validate`."""
+        if not self._oof_predictions:
+            raise ClassicalError("oof_predictions accessed before cross_validate() ran.")
+        return list(self._oof_predictions)
 
-__all__ = ["ClassicalBaseline"]
+
+__all__ = ["ClassicalBaseline", "OofPrediction"]

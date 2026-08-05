@@ -77,6 +77,7 @@ def main(cfg: DictConfig) -> None:
             Path(str(cfg.classical.report.metrics_dir)), Path(str(cfg.classical.report.figures_dir))
         )
         report.write_per_fold(metrics)
+        report.write_predictions(baseline.oof_predictions)
         report.write_metrics_json(
             metrics,
             run_id=run.run_id,

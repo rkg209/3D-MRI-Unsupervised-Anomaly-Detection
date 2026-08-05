@@ -64,6 +64,7 @@ class ReportGenerator:
         loss: str,
         split: str,
         n_volumes: int,
+        split_hash: str,
         run_id: str | None = None,
         results_run_id: str | None = None,
     ) -> Path:
@@ -78,6 +79,12 @@ class ReportGenerator:
         written with the wrong label and never be noticed. ``model``/``loss`` together form the
         ``cell_id`` (``f"{model}__{loss}"``) that namespaces this matrix cell in
         ``artifacts/metrics/`` and ``artifacts/figures/``.
+
+        ``split_hash`` is a **required keyword** (Spec 007 acceptance 1) — the
+        ``SplitContract.content_hash()`` stamped into the recon manifest this cell's
+        ``ReconResult``s were produced from. It is what lets the paradigm comparison assert the
+        classical and DL columns were scored on the identical test split, by comparison rather
+        than by eye.
 
         ``run_id`` is the **eval** run that produced this file; ``results_run_id`` is the
         **recon** run whose persisted ``ReconResult``s were scored. They are different runs and
@@ -109,6 +116,7 @@ class ReportGenerator:
             "cell_id": f"{model}__{loss}",
             "split": split,
             "n_volumes": n_volumes,
+            "split_hash": split_hash,
             "run_id": run_id,
             "results_run_id": results_run_id,
             "headline": headline,

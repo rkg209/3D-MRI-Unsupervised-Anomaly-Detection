@@ -93,7 +93,13 @@ def _make_results(tmp_path: Path, run_id: str = "run-a", n: int = 2) -> Path:
 
 
 def _write_manifest(
-    results_dir: Path, run_id: str, *, model: str, split: str, loss: str | None = "mse"
+    results_dir: Path,
+    run_id: str,
+    *,
+    model: str,
+    split: str,
+    loss: str | None = "mse",
+    split_hash: str | None = "hash-test",
 ) -> None:
     import json
 
@@ -102,6 +108,8 @@ def _write_manifest(
     payload = {"model": model, "split": split, "n_volumes": 2}
     if loss is not None:
         payload["loss"] = loss
+    if split_hash is not None:
+        payload["split_hash"] = split_hash
     (results_dir / run_id / MANIFEST_FILENAME).write_text(json.dumps(payload, indent=2))
 
 
@@ -164,6 +172,29 @@ def test_evaluate_normal_accepts_a_matching_manifest(tmp_path: Path) -> None:
     assert summary["n_volumes"] == 2
 
 
+def test_evaluate_normal_refuses_a_manifest_with_no_split_hash(tmp_path: Path) -> None:
+    from scripts.run_eval import _evaluate_normal
+
+    from mri_ad.exceptions import ArtifactError
+
+    root = _make_results(tmp_path, run_id="run-a")
+    _write_manifest(root, "run-a", model="stub", split="test", split_hash=None)  # pre-007 shape
+    cfg = _cfg(tmp_path, root, "run-a")
+    with pytest.raises(ArtifactError, match="split_hash"):
+        _evaluate_normal(cfg, run_id="test")
+
+
+def test_evaluate_normal_refuses_a_results_dir_with_no_manifest_at_all(tmp_path: Path) -> None:
+    from scripts.run_eval import _evaluate_normal
+
+    from mri_ad.exceptions import ArtifactError
+
+    _make_results(tmp_path, run_id="run-a")  # no manifest written
+    cfg = _cfg(tmp_path, tmp_path / "results", "run-a")
+    with pytest.raises(ArtifactError, match="manifest"):
+        _evaluate_normal(cfg, run_id="test")
+
+
 # ── Acceptance #4, layer 1: runtime — patch the nn.Module dispatcher, not forward() ────────────
 def test_evaluate_normal_completes_even_if_every_model_call_would_explode(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -177,7 +208,8 @@ def test_evaluate_normal_completes_even_if_every_model_call_would_explode(
     monkeypatch.setattr(nn.Module, "__call__", _boom)
     monkeypatch.setattr(nn.Module, "_call_impl", _boom)
 
-    _make_results(tmp_path, run_id="run-a")
+    root = _make_results(tmp_path, run_id="run-a")
+    _write_manifest(root, "run-a", model="stub", split="test")
     cfg = _cfg(tmp_path, tmp_path / "results", "run-a")
     summary = _evaluate_normal(cfg, run_id="test")
     assert summary["n_volumes"] == 2
@@ -196,7 +228,8 @@ def test_evaluate_normal_never_calls_build_default_registry(
 
     from scripts.run_eval import _evaluate_normal
 
-    _make_results(tmp_path, run_id="run-a")
+    root = _make_results(tmp_path, run_id="run-a")
+    _write_manifest(root, "run-a", model="stub", split="test")
     cfg = _cfg(tmp_path, tmp_path / "results", "run-a")
     summary = _evaluate_normal(cfg, run_id="test")
     assert summary["n_volumes"] == 2
@@ -281,6 +314,115 @@ def test_execing_run_arch_loss_matrix_as_a_module_leaves_no_ml_module_in_sys_mod
     assert out.stdout.strip() == "LEAKED:", out.stdout
 
 
+# ── Spec 007: mri_ad.eval.{curves,paradigm} / run_paradigm_comparison.py stay report-safe ──────
+def test_importing_eval_curves_leaves_no_ml_module_in_sys_modules() -> None:
+    code = (
+        "import sys\n"
+        "import mri_ad.eval.curves\n"
+        f"leaked = {sorted(FORBIDDEN_ML_MODULES)!r}\n"
+        "hit = [m for m in leaked if m in sys.modules]\n"
+        "print('LEAKED:' + ','.join(hit))\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO, capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "LEAKED:", out.stdout
+
+
+def test_importing_eval_paradigm_leaves_no_ml_module_in_sys_modules() -> None:
+    code = (
+        "import sys\n"
+        "import mri_ad.eval.paradigm\n"
+        f"leaked = {sorted(FORBIDDEN_ML_MODULES)!r}\n"
+        "hit = [m for m in leaked if m in sys.modules]\n"
+        "print('LEAKED:' + ','.join(hit))\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO, capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "LEAKED:", out.stdout
+
+
+def test_execing_run_paradigm_comparison_as_a_module_leaves_no_ml_module_in_sys_modules() -> None:
+    code = (
+        "import runpy, sys\n"
+        "runpy.run_path('scripts/run_paradigm_comparison.py', run_name='not_main')\n"
+        f"leaked = {sorted(FORBIDDEN_ML_MODULES)!r}\n"
+        "hit = [m for m in leaked if m in sys.modules]\n"
+        "print('LEAKED:' + ','.join(hit))\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO, capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "LEAKED:", out.stdout
+
+
+def test_report_orchestrator_skips_missing_inputs_without_crashing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``make report`` on a totally empty ``artifacts/`` tree must print skip-reasons, not raise."""
+    from omegaconf import OmegaConf
+    from scripts.run_report import main as run_report_main
+
+    cfg = OmegaConf.create(
+        {
+            "seed": 42,
+            "deterministic": True,
+            "model": {"name": "unetr"},
+            "loss": {"name": "mse_ssim"},
+            "eval": {
+                "metrics_dir": str(tmp_path / "metrics"),
+                "figures_dir": str(tmp_path / "figures"),
+            },
+            "matrix": {
+                "metrics_root": str(tmp_path / "metrics"),
+                "tables_dir": str(tmp_path / "tables"),
+                "basename": "arch_loss_matrix",
+                "cells": [],
+            },
+            "paradigm": {
+                "classical_metrics_dir": str(tmp_path / "classical" / "metrics"),
+                "metrics_root": str(tmp_path / "metrics"),
+                "tables_dir": str(tmp_path / "tables"),
+                "figures_dir": str(tmp_path / "figures"),
+                "basename": "paradigm_comparison",
+                "score_field": "flagged_fraction",
+                "slice_threshold": None,
+                "threshold_grid": [0.1],
+                "columns": [
+                    {
+                        "key": "classical",
+                        "paradigm": "Classical",
+                        "localizes": False,
+                        "na_reason": "not run",
+                    }
+                ],
+            },
+        }
+    )
+
+    class _NullRun:
+        run_id = "test"
+
+        def record(self, **kwargs):
+            pass
+
+    monkeypatch.setattr("scripts.run_report.RunLogger", lambda cfg: _NullRunContext())
+
+    class _NullRunContext:
+        def __enter__(self):
+            return _NullRun()
+
+        def __exit__(self, *args):
+            return False
+
+    run_report_main.__wrapped__(cfg)  # bypass hydra.main's CLI arg parsing
+    out = capsys.readouterr().out
+    assert "[skip: per-cell]" in out
+    assert "[skip: arch x loss matrix]" not in out  # empty cells list is not an error
+    assert "[paradigm]" in out or "[skip: paradigm comparison]" in out
+
+
 def test_report_generation_finishes_well_under_the_two_minute_budget(tmp_path: Path) -> None:
     from mri_ad.eval.report import ReportGenerator
 
@@ -310,7 +452,13 @@ def test_report_generation_finishes_well_under_the_two_minute_budget(tmp_path: P
     start = time.monotonic()
     generator.write_per_volume(rows)
     generator.write_aggregate(
-        aggregate, mode="normal", model="unetr", loss="mse_ssim", split="test", n_volumes=250
+        aggregate,
+        mode="normal",
+        model="unetr",
+        loss="mse_ssim",
+        split="test",
+        n_volumes=250,
+        split_hash="hash-test",
     )
     generator.plot_dice_distribution(rows)
     generator.write_summary_markdown()
