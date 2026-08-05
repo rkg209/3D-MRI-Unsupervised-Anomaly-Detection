@@ -1,0 +1,25 @@
+# Evaluation harness (Spec 004). See specs/004-eval-harness.md.
+#
+# `make eval` scores saved test-split ReconResults — no model, no GPU. The published Dice/IoU
+# below is legacy/metric-uad.ipynb's reported UNETR headline (Dice 0.6255, IoU 0.4551), invalid
+# for the four reasons documented in eval/legacy.py; it exists here only so aggregate.json can
+# report the honest delta against it (acceptance test 7), never to be matched.
+legacy_compat: false
+results_run_id: null # null -> newest run dir under recon.results_dir
+metrics_dir: ${paths.artifact_root}/metrics
+figures_dir: ${paths.artifact_root}/figures
+labels_dir: null # D-B override; null -> ground truth embedded in each ReconResult
+
+legacy:
+  # subject_count=100 matches legacy/metric-uad.ipynb cell 14 exactly (`subject_count = 100`).
+  # The notebook iterates `os.listdir` order (filesystem-dependent, not reproducible after the
+  # fact); `sort_subjects` below substitutes a deterministic order, which is why the ±0.02
+  # match is an open risk (R1 in the Spec 004 plan), not a guarantee.
+  subject_count: 100
+  chunk_index: 4
+  threshold: 0.1
+  crop_size: [160, 130, 170]
+  sort_subjects: true
+  published_dice: 0.6255
+  published_iou: 0.4551
+  tolerance: 0.02

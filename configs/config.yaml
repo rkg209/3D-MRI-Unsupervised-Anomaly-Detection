@@ -4,6 +4,7 @@ defaults:
   - model: unetr
   - loss: mse_ssim
   - threshold: percentile
+  - eval: default
   - _self_
 
 # Reproducibility spine (Spec 000). Every entry point calls seed_everything(seed) first.

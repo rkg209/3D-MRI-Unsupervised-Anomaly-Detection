@@ -1,9 +1,15 @@
-.PHONY: help install slice sweep train eval report classical demo test lint check-data
+.PHONY: help install slice sweep recon train eval report classical demo test lint check-data
 .DEFAULT_GOAL := help
 
 # Hydra overrides, e.g.: make eval HYDRA_OVERRIDES="+experiment=cluster model=unetr"
 HYDRA_OVERRIDES ?=
 PY := python
+
+# make eval LEGACY_BUG_COMPAT=1 translates to a Hydra group selection at the shell boundary — no
+# Python source reads this environment variable (Spec 004 acceptance test 6). Config stays the
+# single source of truth: `make eval HYDRA_OVERRIDES="eval=legacy_compat"` is equivalent.
+LEGACY_BUG_COMPAT ?= 0
+EVAL_MODE := $(if $(filter 1 true yes,$(LEGACY_BUG_COMPAT)),eval=legacy_compat,)
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -22,8 +28,12 @@ slice:  ## Spec 000: one checkpoint, one volume -> Dice + figure
 sweep:  ## Spec 003: Dice-vs-threshold sweep on the VALIDATION split. MANUAL ONLY.
 	$(PY) scripts/run_sweep.py $(HYDRA_OVERRIDES)
 
-eval:  ## Full test-split evaluation from saved checkpoints (GPU preferred)
-	$(PY) scripts/run_eval.py $(HYDRA_OVERRIDES)
+# GPU-SPENDING. Manual invoke only. e.g. make recon HYDRA_OVERRIDES="+experiment=cluster model=unetr"
+recon:  ## Spec 004: reconstruct the TEST split -> saved ReconResults. MANUAL ONLY.
+	$(PY) scripts/run_recon.py $(HYDRA_OVERRIDES)
+
+eval:  ## Spec 004: score saved test-split ReconResults. No model, no GPU. LEGACY_BUG_COMPAT=1 for bug-compat.
+	$(PY) scripts/run_eval.py $(EVAL_MODE) $(HYDRA_OVERRIDES)
 
 classical:  ## Spec 006: classical-ML baseline (features -> gradient boosting -> CV)
 	$(PY) scripts/run_classical.py $(HYDRA_OVERRIDES)

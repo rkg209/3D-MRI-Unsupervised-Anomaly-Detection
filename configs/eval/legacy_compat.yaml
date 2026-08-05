@@ -1,0 +1,12 @@
+# @package _global_
+# Reproduces legacy/metric-uad.ipynb's bugs ON PURPOSE (Spec 004 acceptance test 6).
+# NEVER publish a number produced by this config.
+#
+# `override /threshold: absolute` pins the residual cutoff to the prior work's hardcoded
+# `residual > 0.1` (configs/threshold/absolute.yaml) — a plain `threshold: absolute` key here
+# would just overwrite the threshold *node* with a string, not select the group's YAML.
+defaults:
+  - override /threshold: absolute
+
+eval:
+  legacy_compat: true

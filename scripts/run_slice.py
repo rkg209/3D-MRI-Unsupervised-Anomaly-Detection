@@ -26,7 +26,9 @@ from mri_ad.eval.metrics import MetricsComputer  # noqa: E402
 from mri_ad.exceptions import DataError  # noqa: E402
 from mri_ad.models import build_default_registry  # noqa: E402
 from mri_ad.recon import ReconstructionEngine  # noqa: E402
-from mri_ad.utils import DeviceManager, RunLogger, seed_everything  # noqa: E402
+from mri_ad.utils.device import DeviceManager  # noqa: E402
+from mri_ad.utils.run_logger import RunLogger  # noqa: E402
+from mri_ad.utils.seed import seed_everything  # noqa: E402
 
 
 def _resolve_volume_id(brats_dir: Path, volume_id: str | None) -> str:

@@ -21,6 +21,7 @@ from omegaconf import DictConfig
 
 from mri_ad.data.datasets import BraTSDataset
 from mri_ad.data.split import SplitContract
+from mri_ad.eval.loader import MANIFEST_FILENAME
 from mri_ad.exceptions import ConfigError, DataError
 from mri_ad.models import build_default_registry
 from mri_ad.recon import (
@@ -29,7 +30,9 @@ from mri_ad.recon import (
     save_result,
     select_operating_point,
 )
-from mri_ad.utils import DeviceManager, RunLogger, seed_everything
+from mri_ad.utils.device import DeviceManager
+from mri_ad.utils.run_logger import RunLogger
+from mri_ad.utils.seed import seed_everything
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
@@ -72,6 +75,16 @@ def main(cfg: DictConfig) -> None:
             if bool(cfg.recon.save_results):
                 save_result(result, Path(str(cfg.recon.results_dir)), run.run_id)
             results.append(result)
+
+        if bool(cfg.recon.save_results):
+            # Persisted under the same recon.results_dir root run_recon.py writes test-split
+            # results into — this manifest is what lets `make eval` refuse to silently pick up a
+            # val-split sweep run and score it as if it were test (trap #5 wearing a new costume).
+            manifest = {"model": str(cfg.model.name), "split": "val", "n_volumes": len(val_ids)}
+            recon_results_dir = Path(str(cfg.recon.results_dir))
+            (recon_results_dir / run.run_id / MANIFEST_FILENAME).write_text(
+                json.dumps(manifest, indent=2, sort_keys=True)
+            )
 
         points = run_threshold_sweep(results, cfg.threshold.sweep, split="val")
         best = select_operating_point(points)

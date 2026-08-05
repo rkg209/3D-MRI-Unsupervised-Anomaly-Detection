@@ -162,7 +162,7 @@ def test_chunk_reassembly_covers_whole_volume() -> None:
 def test_run_logger_writes_provenance_without_leaks(tmp_path: Path) -> None:
     from omegaconf import OmegaConf
 
-    from mri_ad.utils import RunLogger
+    from mri_ad.utils.run_logger import RunLogger
 
     cfg = OmegaConf.create(
         {
@@ -192,7 +192,7 @@ def test_run_logger_writes_provenance_without_leaks(tmp_path: Path) -> None:
 
 # ── DeviceManager ─────────────────────────────────────────────────────────────
 def test_device_manager_honours_explicit_and_auto() -> None:
-    from mri_ad.utils import DeviceManager
+    from mri_ad.utils.device import DeviceManager
 
     assert DeviceManager.get_device("cpu").type == "cpu"
     assert DeviceManager.get_device("auto").type in {"cuda", "mps", "cpu"}
