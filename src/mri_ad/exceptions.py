@@ -54,6 +54,19 @@ class EvalError(MRIAnomalyDetectionError):
     """Base class for evaluation-harness failures."""
 
 
+# ── classical/ ────────────────────────────────────────────────────────────────
+class ClassicalError(MRIAnomalyDetectionError):
+    """Base class for classical-baseline (radiomic features + gradient boosting) failures."""
+
+
+class FeatureCacheError(ClassicalError):
+    """A cached feature matrix's provenance disagreed with what was requested.
+
+    Raised on a split-hash, feature-hash, granularity, feature-name, or schema-version
+    mismatch — never silently re-used, per Spec 006's "loud failure" rule for the cache.
+    """
+
+
 # ── config / artifacts ────────────────────────────────────────────────────────
 class ConfigError(MRIAnomalyDetectionError):
     """A required config key was missing or invalid."""

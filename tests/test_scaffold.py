@@ -34,6 +34,8 @@ def test_exception_hierarchy_is_rooted() -> None:
         ex.EvalError,
         ex.ConfigError,
         ex.ArtifactError,
+        ex.ClassicalError,
+        ex.FeatureCacheError,
     ]
     for leaf in leaves:
         assert issubclass(leaf, ex.MRIAnomalyDetectionError)
@@ -64,6 +66,7 @@ def test_model_interface_requires_all_three_methods() -> None:
         "configs/model/attention_unet.yaml",
         "configs/loss/mse_ssim.yaml",
         "configs/threshold/percentile.yaml",
+        "configs/classical/default.yaml",
         "configs/experiment/laptop.yaml",
         "configs/experiment/cluster.yaml",
     ],

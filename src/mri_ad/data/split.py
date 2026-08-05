@@ -12,11 +12,14 @@ never tune a threshold on ``test``).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import random
 from dataclasses import dataclass
 from pathlib import Path
+
+from omegaconf import DictConfig, OmegaConf
 
 from mri_ad.exceptions import SplitContractViolationError
 
@@ -100,5 +103,68 @@ class SplitContract:
                 "re-split — this will invalidate comparisons against prior runs."
             )
 
+    def content_hash(self) -> str:
+        """SHA-256 of the canonical JSON of this contract — keys Spec 006's feature cache."""
+        payload = {"seed": self.seed, "openbhb": self.openbhb, "brats": self.brats}
+        canonical = json.dumps(payload, sort_keys=True)
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
-__all__ = ["DEFAULT_BRATS_FRACTIONS", "DEFAULT_OPENBHB_FRACTIONS", "SplitContract"]
+
+def _list_openbhb_ids(directory: Path) -> list[str]:
+    if not directory.is_dir():
+        return []
+    return sorted(p.name for p in directory.iterdir() if p.is_file())
+
+
+def _list_brats_ids(directory: Path) -> list[str]:
+    if not directory.is_dir():
+        return []
+    return sorted(p.name for p in directory.iterdir() if p.is_dir())
+
+
+def resolve_contract(cfg: DictConfig, *, build_if_missing: bool) -> SplitContract:
+    """Load the split contract recorded at ``cfg.data.split.contract_path``, or build it.
+
+    Nothing in the repo writes ``split_contract.json`` on its own yet (``run_recon.py`` and
+    ``run_sweep.py`` both dead-end on a missing file) — this is the one place that turns a data
+    directory listing into the canonical, on-disk contract every downstream script trusts.
+
+    A contract already on disk is **verified**, never silently replaced: the current directory
+    listings are re-partitioned with the same seed and fractions, and any disagreement with the
+    recorded contract (a subject gained or lost) raises
+    :class:`~mri_ad.exceptions.SplitContractViolationError` rather than quietly re-splitting.
+    """
+    contract_path = Path(str(cfg.data.split.contract_path))
+    openbhb_ids = _list_openbhb_ids(Path(str(cfg.data.openbhb.dir)))
+    brats_ids = _list_brats_ids(Path(str(cfg.data.brats.dir)))
+    openbhb_fractions = OmegaConf.to_container(cfg.data.split.openbhb, resolve=True)
+    brats_fractions = OmegaConf.to_container(cfg.data.split.brats, resolve=True)
+
+    fresh = SplitContract.build(
+        int(cfg.seed),
+        openbhb_ids,
+        brats_ids,
+        openbhb_fractions=openbhb_fractions,
+        brats_fractions=brats_fractions,
+    )
+
+    if contract_path.is_file():
+        recorded = SplitContract.load(contract_path)
+        recorded.verify(fresh)
+        return recorded
+
+    if not build_if_missing:
+        raise SplitContractViolationError(
+            f"No split contract at {contract_path.name} and build_if_missing=False."
+        )
+
+    fresh.save(contract_path)
+    return fresh
+
+
+__all__ = [
+    "DEFAULT_BRATS_FRACTIONS",
+    "DEFAULT_OPENBHB_FRACTIONS",
+    "SplitContract",
+    "resolve_contract",
+]

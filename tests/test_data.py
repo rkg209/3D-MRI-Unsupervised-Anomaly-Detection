@@ -19,9 +19,13 @@ pytest.importorskip("monai")
 
 from omegaconf import OmegaConf  # noqa: E402
 
-from mri_ad.data.datasets import BraTSDataset, OpenBHBDataset  # noqa: E402
+from mri_ad.data.datasets import (  # noqa: E402
+    BraTSDataset,
+    OpenBHBDataset,
+    load_preprocessed_volume,
+)
 from mri_ad.data.loaders import build_dataloader  # noqa: E402
-from mri_ad.data.split import SplitContract  # noqa: E402
+from mri_ad.data.split import SplitContract, resolve_contract  # noqa: E402
 from mri_ad.data.transforms import build_transforms  # noqa: E402
 from mri_ad.data.validation import DataValidator  # noqa: E402
 from mri_ad.exceptions import DescriptiveValidationError, SplitContractViolationError  # noqa: E402
@@ -248,3 +252,79 @@ def test_dataset_items_never_leak_a_path_or_scan_suffix(tmp_path: Path) -> None:
             assert str(tmp_path) not in text
         assert isinstance(item["volume_index"], int)
         assert isinstance(item["chunk_index"], int)
+
+
+# ── Spec 006 R4: content_hash + resolve_contract (build-if-missing / verify-on-mismatch) ──────
+def _split_cfg(tmp_path: Path, openbhb_dir: Path, brats_dir: Path, *, seed: int = 42):
+    return OmegaConf.create(
+        {
+            "seed": seed,
+            "data": {
+                "openbhb": {"dir": str(openbhb_dir)},
+                "brats": {"dir": str(brats_dir)},
+                "split": {
+                    "contract_path": str(tmp_path / "split_contract.json"),
+                    "openbhb": {"train": 0.85, "val": 0.15},
+                    "brats": {"val": 0.2, "test": 0.8},
+                },
+            },
+        }
+    )
+
+
+def test_content_hash_is_stable_and_seed_sensitive() -> None:
+    a = SplitContract.build(42, ["a", "b"], ["x", "y"])
+    b = SplitContract.build(42, ["a", "b"], ["x", "y"])
+    c = SplitContract.build(7, ["a", "b"], ["x", "y"])
+    assert a.content_hash() == b.content_hash()
+    assert a.content_hash() != c.content_hash()
+
+
+def test_resolve_contract_builds_and_saves_when_missing(tmp_path: Path) -> None:
+    openbhb_dir, _ = _make_openbhb_dir(tmp_path, n_subjects=4)
+    brats_dir, _ = _make_brats_dir(tmp_path, n_subjects=4)
+    cfg = _split_cfg(tmp_path, openbhb_dir, brats_dir)
+
+    contract = resolve_contract(cfg, build_if_missing=True)
+
+    contract_path = Path(cfg.data.split.contract_path)
+    assert contract_path.is_file()
+    assert SplitContract.load(contract_path) == contract
+
+
+def test_resolve_contract_raises_when_missing_and_not_build_if_missing(tmp_path: Path) -> None:
+    openbhb_dir, _ = _make_openbhb_dir(tmp_path, n_subjects=2)
+    brats_dir, _ = _make_brats_dir(tmp_path, n_subjects=2)
+    cfg = _split_cfg(tmp_path, openbhb_dir, brats_dir)
+
+    with pytest.raises(SplitContractViolationError):
+        resolve_contract(cfg, build_if_missing=False)
+
+
+def test_resolve_contract_verifies_and_detects_directory_drift(tmp_path: Path) -> None:
+    openbhb_dir, _ = _make_openbhb_dir(tmp_path, n_subjects=4)
+    brats_dir, _ = _make_brats_dir(tmp_path, n_subjects=4)
+    cfg = _split_cfg(tmp_path, openbhb_dir, brats_dir)
+
+    first = resolve_contract(cfg, build_if_missing=True)
+    second = resolve_contract(cfg, build_if_missing=False)
+    assert first == second  # stable across repeated calls, no re-partition
+
+    # A subject appears (directory drift) -> the recorded contract now disagrees, loudly.
+    (brats_dir / "BraTS_extra").mkdir()
+    with pytest.raises(SplitContractViolationError):
+        resolve_contract(cfg, build_if_missing=False)
+
+
+def test_load_preprocessed_volume_returns_whole_volume_never_chunked(tmp_path: Path) -> None:
+    openbhb_dir, _ = _make_openbhb_dir(tmp_path, n_subjects=1)
+    brats_dir, brats_ids = _make_brats_dir(tmp_path, n_subjects=1, depth=40)
+    cfg = _base_cfg(tmp_path, openbhb_dir, brats_dir)
+
+    volume = load_preprocessed_volume(cfg, brats_ids[0])
+
+    assert volume["image"].shape == (1, 40, 128, 128)  # whole depth, no padding/chunking to 16
+    assert volume["label"].shape == (1, 40, 128, 128)
+    assert set(torch.unique(volume["label"]).tolist()) <= {0.0, 1.0}
+    for value in volume.values():
+        assert ".nii" not in str(value)

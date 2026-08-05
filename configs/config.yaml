@@ -6,6 +6,7 @@ defaults:
   - threshold: percentile
   - eval: default
   - matrix: arch_loss
+  - classical: default
   - _self_
 
 # Reproducibility spine (Spec 000). Every entry point calls seed_everything(seed) first.

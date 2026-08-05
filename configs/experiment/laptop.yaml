@@ -11,4 +11,7 @@ data:
     cache_rate: 0.0
   eval_subset: 20 # evaluate 20 volumes only, for a fast local sanity check
 
+classical:
+  subject_limit: 10 # Spec 006 smoke run: 10 subjects, not the full BraTS test split
+
 device: auto

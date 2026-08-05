@@ -60,3 +60,19 @@ Launch the GUI by running the main application file:
 python tk_app.py
 ```
 
+## Classical-ML baseline (Spec 006)
+
+`make classical` runs the honest control: engineered radiomic/texture features (first-order,
+GLCM, gradient, GLRLM — 44/slice) into gradient-boosted trees, cross-validated on the identical
+BraTS test split the reconstruction pipeline is scored on.
+
+- **Operating granularity is slice-level**, not voxel-level: each 2D axial slice is one sample,
+  classified tumor-bearing or not. This gives a clean ROC-AUC but **does not localize**, so it is
+  **not directly comparable to the reconstruction pipeline's voxel-level Dice** — that gap is
+  reported plainly, never glossed over.
+- **PyRadiomics substitution.** PyRadiomics is fragile to build on some platforms, so this
+  baseline uses `scikit-image` for GLCM/first-order/gradient features plus a hand-rolled GLRLM
+  (skimage ships no run-length equivalent) instead. Every generated artifact records
+  `features.library: scikit-image` / `pyradiomics_used: false` so the substitution is visible,
+  not hidden.
+

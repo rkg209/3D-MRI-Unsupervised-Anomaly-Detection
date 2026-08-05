@@ -152,4 +152,23 @@ class BraTSDataset(Dataset):
         return {"image": image, "label": label, "volume_index": vol_idx, "chunk_index": chunk_idx}
 
 
-__all__ = ["BraTSDataset", "OpenBHBDataset"]
+def load_preprocessed_volume(cfg: DictConfig, volume_id: str) -> dict:
+    """Run one BraTS subject through the shared pipeline and return the **whole** volume.
+
+    Unlike :class:`BraTSDataset`, this never pads or chunks depth — Spec 006's classical
+    baseline must never see chunking's zero-padded tail slices, which would enter the slice
+    pool as fabricated negatives. Returns ``{"image": (1,D,128,128) in [0,1], "label":
+    (1,D,128,128) in {0,1}}``. No path or identifier survives into the returned dict.
+    """
+    subject_dir = Path(str(cfg.data.brats.dir)) / volume_id
+    modality = str(cfg.data.brats.modality)
+    data = {
+        "image_path": _find_modality(subject_dir, volume_id, modality),
+        "label_path": _find_modality(subject_dir, volume_id, "seg"),
+    }
+    transform = Compose([_LoadBraTSd(), build_transforms(cfg, dataset="brats")])
+    result = transform(data)
+    return {"image": result["image"], "label": result["label"]}
+
+
+__all__ = ["BraTSDataset", "OpenBHBDataset", "load_preprocessed_volume"]
