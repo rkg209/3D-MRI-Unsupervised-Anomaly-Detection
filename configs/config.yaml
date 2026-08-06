@@ -11,6 +11,7 @@ defaults:
   - synth: fpi
   - viz: default
   - train: finetune
+  - report: default
   - _self_
 
 # Reproducibility spine (Spec 000). Every entry point calls seed_everything(seed) first.

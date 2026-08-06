@@ -357,6 +357,50 @@ def test_execing_run_paradigm_comparison_as_a_module_leaves_no_ml_module_in_sys_
     assert out.stdout.strip() == "LEAKED:", out.stdout
 
 
+# ── Spec 011: mri_ad.eval.{readme_block,scorecard} stay in the report-safe subgraph ─────────────
+def test_importing_eval_readme_block_leaves_no_ml_module_in_sys_modules() -> None:
+    code = (
+        "import sys\n"
+        "import mri_ad.eval.readme_block\n"
+        f"leaked = {sorted(FORBIDDEN_ML_MODULES)!r}\n"
+        "hit = [m for m in leaked if m in sys.modules]\n"
+        "print('LEAKED:' + ','.join(hit))\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO, capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "LEAKED:", out.stdout
+
+
+def test_importing_eval_scorecard_leaves_no_ml_module_in_sys_modules() -> None:
+    code = (
+        "import sys\n"
+        "import mri_ad.eval.scorecard\n"
+        f"leaked = {sorted(FORBIDDEN_ML_MODULES)!r}\n"
+        "hit = [m for m in leaked if m in sys.modules]\n"
+        "print('LEAKED:' + ','.join(hit))\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO, capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "LEAKED:", out.stdout
+
+
+def test_execing_run_report_after_spec_011_still_leaves_no_ml_module_in_sys_modules() -> None:
+    """Re-asserts the acceptance-8 guard now that scorecard/synth are wired into run_report.py."""
+    code = (
+        "import runpy, sys\n"
+        "runpy.run_path('scripts/run_report.py', run_name='not_main')\n"
+        f"leaked = {sorted(FORBIDDEN_ML_MODULES)!r}\n"
+        "hit = [m for m in leaked if m in sys.modules]\n"
+        "print('LEAKED:' + ','.join(hit))\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO, capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "LEAKED:", out.stdout
+
+
 def test_report_orchestrator_skips_missing_inputs_without_crashing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -370,6 +414,7 @@ def test_report_orchestrator_skips_missing_inputs_without_crashing(
             "deterministic": True,
             "model": {"name": "unetr"},
             "loss": {"name": "mse_ssim"},
+            "paths": {"artifact_root": str(tmp_path)},
             "eval": {
                 "metrics_dir": str(tmp_path / "metrics"),
                 "figures_dir": str(tmp_path / "figures"),
@@ -398,8 +443,34 @@ def test_report_orchestrator_skips_missing_inputs_without_crashing(
                     }
                 ],
             },
+            "report": {
+                "readme_path": str(tmp_path / "README.md"),
+                "marker_start": "<!-- SCORECARD_START -->",
+                "marker_end": "<!-- SCORECARD_END -->",
+                "headline_cell": {"model": "unetr", "loss": "mse_ssim"},
+                "sources": {
+                    "matrix_json": str(tmp_path / "tables" / "arch_loss_matrix.json"),
+                    "paradigm_json": str(tmp_path / "tables" / "paradigm_comparison.json"),
+                    "classical_json": str(
+                        tmp_path / "classical" / "metrics" / "classical_metrics.json"
+                    ),
+                    "synth_csv": str(tmp_path / "tables" / "synth_before_after.csv"),
+                    "aggregate_dir": str(tmp_path / "metrics"),
+                    "runs_root": str(tmp_path / "runs"),
+                },
+                "precision": {
+                    "dice": ".4f",
+                    "iou": ".4f",
+                    "auc": ".4f",
+                    "seconds": ".1f",
+                    "gpu_hours": ".2f",
+                },
+                "na_reason_default": "not yet evaluated",
+            },
+            "train": {"init_from": "unetr", "save_as": "unetr_synth"},
         }
     )
+    (tmp_path / "README.md").write_text("<!-- SCORECARD_START -->\nold\n<!-- SCORECARD_END -->\n")
 
     class _NullRun:
         run_id = "test"
@@ -420,6 +491,8 @@ def test_report_orchestrator_skips_missing_inputs_without_crashing(
     out = capsys.readouterr().out
     assert "[skip: per-cell]" in out
     assert "[skip: arch x loss matrix]" not in out  # empty cells list is not an error
+    assert "[scorecard]" in out  # a fully-absent artifact tree still renders an all-n/a scorecard
+    assert "[skip: synth before/after]" in out
     assert "[paradigm]" in out or "[skip: paradigm comparison]" in out
 
 

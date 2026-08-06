@@ -15,6 +15,9 @@ from __future__ import annotations
 import json
 import socket
 import subprocess
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
@@ -68,6 +71,21 @@ class RunLogger:
         """Record scalar results (e.g. ``dice``) to be written into ``run_meta.json``."""
         self.metrics.update(metrics)
 
+    @contextmanager
+    def timer(self, name: str) -> Iterator[None]:
+        """Time a block, accumulating wall-clock seconds into ``metrics["timings"][name]``.
+
+        Accumulates rather than overwrites, so timing the same ``name`` across a per-volume loop
+        (e.g. ``run_recon.py``'s "inference" span) sums to the total, not just the last iteration.
+        """
+        start = time.monotonic()
+        try:
+            yield
+        finally:
+            elapsed = time.monotonic() - start
+            timings = self.metrics.setdefault("timings", {})
+            timings[name] = timings.get(name, 0.0) + elapsed
+
     @property
     def run_id(self) -> str:
         """The unique run stamp (``run_dir``'s name), used to namespace persisted artifacts."""
@@ -92,6 +110,7 @@ class RunLogger:
             "hostname": socket.gethostname(),
             "start_time": self._start.isoformat(),
             "end_time": end.isoformat(),
+            "duration_seconds": (end - self._start).total_seconds(),
             "config": OmegaConf.to_container(self.cfg, resolve=True),
             "metrics": self.metrics,
         }

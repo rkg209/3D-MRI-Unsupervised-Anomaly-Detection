@@ -20,6 +20,9 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
+from mri_ad.eval.before_after import assert_controlled, load_cell
+from mri_ad.eval.before_after import render_csv as render_synth_csv
+from mri_ad.eval.before_after import render_markdown as render_synth_markdown
 from mri_ad.eval.matrix import compute_stats as compute_matrix_stats
 from mri_ad.eval.matrix import load_cells
 from mri_ad.eval.matrix import render_csv as render_matrix_csv
@@ -31,9 +34,14 @@ from mri_ad.eval.paradigm import plot_curves as plot_paradigm_curves
 from mri_ad.eval.paradigm import render_csv as render_paradigm_csv
 from mri_ad.eval.paradigm import render_markdown as render_paradigm_markdown
 from mri_ad.eval.paradigm import write_stats as write_paradigm_stats
+from mri_ad.eval.readme_block import write_block
 from mri_ad.eval.report import ReportGenerator
+from mri_ad.eval.scorecard import load_scorecard
+from mri_ad.eval.scorecard import render_markdown as render_scorecard_markdown
 from mri_ad.exceptions import ArtifactError
 from mri_ad.utils.run_logger import RunLogger
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _report_per_cell(cfg: DictConfig) -> None:
@@ -99,6 +107,43 @@ def _report_paradigm(cfg: DictConfig) -> None:
     print(f"[paradigm] {stats.n_available}/{stats.n_columns} columns available -> {tables_dir}")
 
 
+def _report_scorecard(cfg: DictConfig) -> None:
+    report_cfg = OmegaConf.to_container(cfg.report, resolve=True)
+    card = load_scorecard(report_cfg, REPO_ROOT)
+    block = render_scorecard_markdown(card)
+
+    readme_path = Path(str(report_cfg["readme_path"]))
+    if not readme_path.is_absolute():
+        readme_path = REPO_ROOT / readme_path
+
+    changed = write_block(
+        readme_path,
+        block,
+        start=str(report_cfg["marker_start"]),
+        end=str(report_cfg["marker_end"]),
+    )
+    print(
+        f"[scorecard] {card.n_available}/{len(card.entries)} rows available -> {readme_path} "
+        f"({'updated' if changed else 'unchanged'})"
+    )
+
+
+def _report_synth(cfg: DictConfig) -> None:
+    metrics_root = Path(str(cfg.eval.metrics_dir))
+    runs_root = Path(str(cfg.paths.artifact_root)) / "runs"
+    tables_dir = Path(str(cfg.paths.artifact_root)) / "tables"
+    loss = str(cfg.loss.name)
+
+    before = load_cell(metrics_root, runs_root, model=str(cfg.train.init_from), loss=loss)
+    after = load_cell(metrics_root, runs_root, model=str(cfg.train.save_as), loss=loss)
+    assert_controlled(before, after)
+
+    tables_dir.mkdir(parents=True, exist_ok=True)
+    (tables_dir / "synth_before_after.md").write_text(render_synth_markdown(before, after))
+    render_synth_csv(before, after, tables_dir / "synth_before_after.csv")
+    print(f"[synth] before={before.dice_mean:.4f} after={after.dice_mean:.4f} -> {tables_dir}")
+
+
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg: DictConfig) -> None:
     """Regenerate every sub-report from saved artifacts. A missing input skips, never crashes."""
@@ -107,6 +152,8 @@ def main(cfg: DictConfig) -> None:
             ("per-cell", _report_per_cell),
             ("arch x loss matrix", _report_matrix),
             ("paradigm comparison", _report_paradigm),
+            ("scorecard", _report_scorecard),
+            ("synth before/after", _report_synth),
         ):
             try:
                 report_fn(cfg)

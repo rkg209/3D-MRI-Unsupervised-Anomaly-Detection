@@ -61,7 +61,8 @@ def main(cfg: DictConfig) -> None:
 
         results_dir = Path(str(cfg.recon.results_dir))
         for volume_index in range(len(test_ids)):
-            result = engine.run_dataset_volume(dataset, volume_index)
+            with run.timer("inference"):
+                result = engine.run_dataset_volume(dataset, volume_index)
             save_result(result, results_dir, run.run_id)
 
         # run_sweep.py persists val-split results under this same results_dir root with no other
@@ -79,7 +80,18 @@ def main(cfg: DictConfig) -> None:
             json.dumps(manifest, indent=2, sort_keys=True)
         )
 
-        run.record(model=cfg.model.name, loss=cfg.loss.name, split="test", n_volumes=len(test_ids))
+        inference_seconds = run.metrics.get("timings", {}).get("inference", 0.0)
+        seconds_per_volume = inference_seconds / len(test_ids) if test_ids else None
+        gpu_hours = inference_seconds / 3600 if device.type.startswith("cuda") else None
+        run.record(
+            model=cfg.model.name,
+            loss=cfg.loss.name,
+            split="test",
+            n_volumes=len(test_ids),
+            device=str(device),
+            seconds_per_volume=seconds_per_volume,
+            gpu_hours=gpu_hours,
+        )
         print(run.run_id)
 
 

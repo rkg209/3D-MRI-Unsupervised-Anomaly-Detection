@@ -1,4 +1,4 @@
-.PHONY: help install slice sweep recon train eval report classical demo test lint check-data matrix slice-scores paradigm synth-table
+.PHONY: help install slice sweep recon train eval report report-check classical demo test lint check-data matrix slice-scores paradigm synth-table
 .DEFAULT_GOAL := help
 
 # Hydra overrides, e.g.: make eval HYDRA_OVERRIDES="+experiment=cluster model=unetr"
@@ -40,6 +40,9 @@ classical:  ## Spec 006: classical-ML baseline (features -> gradient boosting ->
 
 report:  ## Regenerate all tables/plots/README scorecard from saved artifacts. No GPU.
 	$(PY) scripts/run_report.py $(HYDRA_OVERRIDES)
+
+report-check: report  ## CI guard: fails if `make report` would change the checked-in README.
+	git diff --exit-code README.md
 
 matrix:  ## Spec 005: render artifacts/tables/arch_loss_matrix.{csv,md,json}. No GPU.
 	$(PY) scripts/run_arch_loss_matrix.py $(HYDRA_OVERRIDES)

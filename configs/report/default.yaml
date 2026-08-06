@@ -1,0 +1,33 @@
+# Spec 011 — README scorecard generation. `make report` splices the rendered block into
+# README.md between marker_start/marker_end, in place, and nowhere else. Source paths below are
+# the only place a scorecard source lives — never hardcoded in scorecard.py — so pointing
+# `make report` at a different artifact tree (+experiment=cluster) also repoints the README.
+readme_path: ./README.md
+marker_start: "<!-- SCORECARD_START -->"
+marker_end: "<!-- SCORECARD_END -->"
+mobility_marker_start: "<!-- MOBILITY_START -->"
+mobility_marker_end: "<!-- MOBILITY_END -->"
+
+# The one (model, loss) cell the scorecard headlines — the same cell Spec 005's matrix and
+# Spec 007's paradigm comparison both already call "headline".
+headline_cell:
+  model: unetr
+  loss: mse_ssim
+
+# Every artifact this report reads. Nothing else may be opened by scorecard.py.
+sources:
+  matrix_json: ${matrix.tables_dir}/${matrix.basename}.json
+  paradigm_json: ${paradigm.tables_dir}/${paradigm.basename}.json
+  classical_json: ${classical.report.metrics_dir}/classical_metrics.json
+  synth_csv: ${paths.artifact_root}/tables/synth_before_after.csv
+  aggregate_dir: ${eval.metrics_dir}
+  runs_root: ${paths.artifact_root}/runs
+
+precision:
+  dice: ".4f"
+  iou: ".4f"
+  auc: ".4f"
+  seconds: ".1f"
+  gpu_hours: ".2f"
+
+na_reason_default: "not yet evaluated"
