@@ -1,0 +1,41 @@
+# Spec 010: demo video + interactive viewer. `make demo`.
+# Reads SAVED ReconResults only — no model, no GPU (acceptance test 2).
+results_run_id: null      # null -> newest run dir under recon.results_dir (eval/loader.py)
+volume_id: null           # null -> largest ground-truth area; ties -> lexicographic min
+output_path: ${paths.artifact_root}/demo/demo.mp4
+
+fps: 4                    # slow enough to watch a lesion appear and vanish
+dpi: 100
+figsize: [15.0, 3.2]      # 1500x320 px — BOTH dims even, required by libx264/yuv420p (R2)
+# Static caption. Never a volume_id, never a filesystem path (NFR-13 / acceptance 5).
+caption: "saved reconstruction · no live inference"
+annotate_volume_id: false # D-A
+
+panels:
+  - { key: original,       title: "original",       cmap: gray, overlay: null }
+  - { key: reconstruction, title: "reconstruction", cmap: gray, overlay: null }
+  - { key: residual,       title: "residual",       cmap: hot,  overlay: null }   # ported cm.hot
+  - { key: anomaly_mask,   title: "anomaly mask",   cmap: gray, overlay: null }
+  - { key: ground_truth,   title: "ground truth",   cmap: gray, overlay: original }
+
+normalize:
+  eps: 1.0e-8             # range < eps -> all-zero panel; guards the zero-pad slices (test 4)
+  residual_scale: per_volume  # per_volume | per_slice. See D-D — per_slice is the legacy
+                              # behaviour and makes an anomaly-free slice look like a lesion slice.
+overlay:
+  color: [255, 0, 0]
+  alpha: 0.45
+
+# The BraTS artifact is 160 deep (155 real + 5 zero-pad). Never render the pad.
+depth:
+  policy: nonzero         # all | nonzero | gt_window | explicit   (D-C)
+  window: 40               # gt_window only: frames centred on the max-GT-area slice
+  min_intensity: 0.0       # a slice is "empty" if original.max() <= this
+  explicit: null           # [start, stop] inclusive when policy=explicit
+  max_frames: 160          # hard cap; uniform-stride subsample beyond it
+
+video:
+  codec: libx264
+  quality: 8
+  pixelformat: yuv420p
+  macro_block_size: 1     # frames are already even-sized; forbid imageio's silent resize (R2)

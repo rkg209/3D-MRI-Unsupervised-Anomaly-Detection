@@ -67,6 +67,15 @@ class FeatureCacheError(ClassicalError):
     """
 
 
+# ── viz/ ──────────────────────────────────────────────────────────────────────
+class VizError(MRIAnomalyDetectionError):
+    """A demo/viewer rendering or export failure (Spec 010).
+
+    Raised on a degenerate render input, a missing/unusable ffmpeg encoder, or an attempt to use
+    the optional interactive viewer without the ``[viz]`` extra installed.
+    """
+
+
 # ── train/ ────────────────────────────────────────────────────────────────────
 class TrainError(MRIAnomalyDetectionError):
     """Base class for training-loop failures (Spec 009).

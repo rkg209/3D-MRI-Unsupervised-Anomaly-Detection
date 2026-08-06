@@ -54,6 +54,22 @@ def iter_results(results_dir: Path) -> Iterator[ReconResult]:
         yield load_result(path)
 
 
+def load_by_volume_id(results_dir: Path, volume_id: str) -> ReconResult:
+    """Load the single ``ReconResult`` for ``volume_id`` under ``results_dir``.
+
+    Raises :class:`ArtifactError` on a miss, reporting the *count* of available volumes rather
+    than listing their ids (NFR-13 discipline — the same rule the demo's frames follow).
+    """
+    path = Path(results_dir) / f"{volume_id}.pt"
+    if not path.is_file():
+        n = len(result_paths(results_dir))
+        raise ArtifactError(
+            f"No ReconResult for volume_id={volume_id!r} under {results_dir.name} "
+            f"({n} volume(s) available)."
+        )
+    return load_result(path)
+
+
 def read_manifest(results_dir: Path) -> dict | None:
     """Read ``<results_dir>/manifest.json`` if present, else ``None``.
 
@@ -74,6 +90,7 @@ def read_manifest(results_dir: Path) -> dict | None:
 __all__ = [
     "MANIFEST_FILENAME",
     "iter_results",
+    "load_by_volume_id",
     "read_manifest",
     "resolve_results_dir",
     "result_paths",

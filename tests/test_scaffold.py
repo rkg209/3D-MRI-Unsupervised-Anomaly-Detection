@@ -69,6 +69,7 @@ def test_model_interface_requires_all_three_methods() -> None:
         "configs/classical/default.yaml",
         "configs/experiment/laptop.yaml",
         "configs/experiment/cluster.yaml",
+        "configs/viz/default.yaml",
     ],
 )
 def test_configs_parse(rel: str) -> None:

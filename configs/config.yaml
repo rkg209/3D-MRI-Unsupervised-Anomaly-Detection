@@ -9,6 +9,7 @@ defaults:
   - classical: default
   - paradigm: default
   - synth: fpi
+  - viz: default
   - train: finetune
   - _self_
 
