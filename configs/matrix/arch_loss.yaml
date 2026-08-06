@@ -27,3 +27,7 @@ cells:
 
   # --- Spec 009 novelty: does synthetic-anomaly fine-tuning improve detection separability? ---
   - {model: unetr_synth, loss: mse_ssim, role: novelty, na_reason: "not trained"}
+
+  # --- Spec 012 stretch: multi-scale attention gates on UNETR, gated on 005 showing the
+  # fidelity/detection anti-correlation is scale-dependent. See .claude/plans/012-multiscale-attention.md.
+  - {model: msa_unetr, loss: mse_ssim, role: stretch, na_reason: "stretch — not trained (Spec 012 gate closed)"}

@@ -32,7 +32,7 @@ from mri_ad.data.datasets import BraTSDataset, OpenBHBDataset
 from mri_ad.data.split import resolve_contract
 from mri_ad.eval.metrics import MetricsComputer
 from mri_ad.exceptions import ArtifactError, ConfigError
-from mri_ad.models import build_default_registry
+from mri_ad.models import AnomalyDetectionModel, ModelRegistry, build_default_registry
 from mri_ad.recon.engine import ReconstructionEngine
 from mri_ad.synth.dataset import AnomalyInformedDataset
 from mri_ad.synth.separability import best_intensity_dice
@@ -150,9 +150,36 @@ def _make_validate_fn(
     return validate_fn
 
 
+def _build_and_warm_start_model(registry: ModelRegistry, cfg: DictConfig) -> AnomalyDetectionModel:
+    """Build the model named by ``cfg.train.save_as``/``init_from`` and load its starting weights.
+
+    Spec 012 (STRETCH): ``warm_start_from`` and ``init_from`` are mutually exclusive. The gated
+    ``msa_unetr`` variant cannot load a plain-UNETR checkpoint under ``strict=True`` (it has extra
+    gate keys), so it warm-starts via ``load_from_unetr`` — a key-partitioned, still-strict load
+    (D4) — instead of the ordinary ``load_checkpoint`` path every other fine-tune uses.
+    """
+    warm_start_from = cfg.train.get("warm_start_from")
+    init_from = cfg.train.get("init_from")
+    if warm_start_from and init_from:
+        raise ConfigError(
+            "train.warm_start_from and train.init_from are mutually exclusive "
+            f"(got warm_start_from={warm_start_from!r}, init_from={init_from!r})."
+        )
+    if warm_start_from:
+        model = registry.get(str(cfg.train.save_as))
+        model.load_from_unetr(registry.checkpoint_path(str(warm_start_from)))
+        return model
+    model = registry.get(str(init_from))
+    model.load_checkpoint(registry.checkpoint_path(str(init_from)))
+    return model
+
+
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg: DictConfig) -> None:
-    """Fine-tune ``cfg.train.init_from`` on FPI corruption, saving under ``cfg.train.save_as``."""
+    """Fine-tune ``cfg.train.init_from``, saving under ``cfg.train.save_as``.
+
+    Or warm-start ``cfg.train.warm_start_from`` (Spec 012) on the same FPI corruption objective.
+    """
     seed_everything(cfg.seed, deterministic=cfg.deterministic)
     device = _require_cuda(cfg)
 
@@ -181,8 +208,7 @@ def main(cfg: DictConfig) -> None:
         _preflight_separability_check(train_dataset, cfg)
 
         registry = build_default_registry()
-        model = registry.get(str(cfg.train.init_from))
-        model.load_checkpoint(registry.checkpoint_path(str(cfg.train.init_from)))
+        model = _build_and_warm_start_model(registry, cfg)
         model.to(device)
 
         train_loader = _build_loader(train_dataset, cfg, shuffle=True, seed=int(cfg.seed))

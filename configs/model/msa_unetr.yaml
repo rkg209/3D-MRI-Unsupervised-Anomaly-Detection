@@ -1,0 +1,29 @@
+# Spec 012 (STRETCH). Multi-scale attention gates on UNETR's four skip connections.
+# Identity at initialization: the gate's psi conv is zero-init and the gate is 2*sigmoid(psi(...)),
+# so the gate evaluates to exactly 1.0 and the forward pass is bitwise equal to plain UNETR
+# (test-enforced: tests/test_msa_unetr.py::test_identity_at_init_matches_plain_unetr).
+# GPU training is gated — see .claude/plans/012-multiscale-attention.md "The evidence gate". As of
+# this build the gate is closed and this row renders n/a in the 005 matrix (checkpoint absent).
+name: msa_unetr
+target: mri_ad.models.msa_unetr.MultiScaleAttentionUNETR
+
+params:
+  # --- byte-identical to configs/model/unetr.yaml (test-enforced) ---
+  in_channels: 1
+  img_size: [16, 128, 128]
+  feature_size: 32
+  hidden_size: 768
+  mlp_dim: 3072
+  num_heads: 12
+  num_layers: 12
+  patch_size: [16, 16, 16]
+  norm_name: instance
+  res_block: true
+  conv_block: false
+  dropout_rate: 0.0
+  # --- Spec 012 additions ---
+  gate_reduction: 2
+  multiscale_context: true      # false => plain AttUNet-style gating (the free ablation, D5)
+  gated_scales: [1, 2, 3, 4]
+
+checkpoint: ${paths.checkpoint_root}/msa_unetr.pth

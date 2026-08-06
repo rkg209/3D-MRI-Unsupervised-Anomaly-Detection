@@ -1,0 +1,32 @@
+# Spec 012 (STRETCH) fine-tune. GPU. MANUAL INVOKE ONLY (/train, make train), and only once the
+# evidence gate in .claude/plans/012-multiscale-attention.md is open.
+#
+# Same FPI objective as Spec 009's finetune.yaml (D8): the only varying factor between msa_unetr
+# and unetr_synth must be the architecture, not the training objective. warm_start_from replaces
+# init_from (mutually exclusive — see scripts/run_train.py) because the gated model does not load
+# a plain UNETR checkpoint under strict=True; it warm-starts via load_from_unetr instead.
+name: msa_finetune
+warm_start_from: unetr          # registry name of the PLAIN checkpoint to warm-start the shared weights from
+save_as: msa_unetr              # must match configs/model/msa_unetr.yaml `name`
+checkpoint_path: ${paths.checkpoint_root}/msa_unetr.pth
+
+max_epochs: 20                  # matches Spec 009's fine-tune schedule (D8)
+optimizer:
+  target: torch.optim.Adam
+  params:
+    lr: 1.0e-5                  # same rationale as Spec 009: a 12-layer ViT catastrophically
+                                 # forgets at the from-scratch 1e-4 LR
+    weight_decay: 1.0e-5
+scheduler:
+  target: torch.optim.lr_scheduler.ReduceLROnPlateau
+  params: {mode: min, factor: 0.5, patience: 3}
+grad_clip_norm: 1.0
+early_stopping_patience: 6
+amp: false                      # off: mixed precision breaks bitwise determinism (NFR-1)
+allow_cpu: false                # run_train.py raises ConfigError on a non-CUDA device unless true
+
+selection:
+  metric: val_dice              # val_dice | val_loss
+  mode: max
+  dice_every_n_epochs: 2
+  n_val_volumes: 8               # BraTS *val* split only. Test is never touched (trap #5).

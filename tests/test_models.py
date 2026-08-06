@@ -78,11 +78,27 @@ def _small_diffusion():
     )
 
 
+def _small_msa_unetr():
+    from mri_ad.models.msa_unetr import MultiScaleAttentionUNETR
+
+    torch.manual_seed(0)
+    return MultiScaleAttentionUNETR(
+        in_channels=1,
+        img_size=(16, 128, 128),
+        feature_size=8,
+        hidden_size=96,
+        mlp_dim=192,
+        num_heads=4,
+        num_layers=12,
+    )
+
+
 MODEL_FACTORIES = {
     "unet": _small_unet,
     "attention_unet": _small_attention_unet,
     "unetr": _small_unetr,
     "diffusion": _small_diffusion,
+    "msa_unetr": _small_msa_unetr,
 }
 
 

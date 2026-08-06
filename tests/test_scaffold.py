@@ -64,6 +64,8 @@ def test_model_interface_requires_all_three_methods() -> None:
         "configs/model/unetr.yaml",
         "configs/model/unet.yaml",
         "configs/model/attention_unet.yaml",
+        "configs/model/msa_unetr.yaml",
+        "configs/train/msa_finetune.yaml",
         "configs/loss/mse_ssim.yaml",
         "configs/threshold/percentile.yaml",
         "configs/classical/default.yaml",
