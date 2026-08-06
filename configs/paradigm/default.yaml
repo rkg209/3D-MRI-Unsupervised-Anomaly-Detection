@@ -26,3 +26,5 @@ columns:
      localizes: true, na_reason: "not evaluated"}
   - {key: diffusion__ddpm, model: diffusion, loss: ddpm, paradigm: "Diffusion (AnoDDPM)",
      localizes: true, na_reason: "untrained"}
+  - {key: unetr_synth__mse_ssim, model: unetr_synth, loss: mse_ssim, paradigm: "UNETR (synth-anomaly)",
+     localizes: true, na_reason: "not trained"}

@@ -1,0 +1,26 @@
+# Spec 009 fine-tune. GPU. MANUAL INVOKE ONLY (/train, make train) — constraint C-3.
+name: finetune
+init_from: unetr                # registry name whose checkpoint we fine-tune from
+save_as: unetr_synth            # must match configs/model/unetr_synth.yaml `name`
+checkpoint_path: ${paths.checkpoint_root}/unetr_synth.pth
+
+max_epochs: 20                  # fine-tune, not the legacy 50-epoch from-scratch schedule
+optimizer:
+  target: torch.optim.Adam
+  params:
+    lr: 1.0e-5                  # 10x below the legacy from-scratch 1e-4: a 12-layer ViT
+                                 # catastrophically forgets at the from-scratch LR
+    weight_decay: 1.0e-5
+scheduler:
+  target: torch.optim.lr_scheduler.ReduceLROnPlateau
+  params: {mode: min, factor: 0.5, patience: 3}
+grad_clip_norm: 1.0
+early_stopping_patience: 6
+amp: false                      # off: mixed precision breaks bitwise determinism (NFR-1)
+allow_cpu: false                # run_train.py raises ConfigError on a non-CUDA device unless true
+
+selection:
+  metric: val_dice              # val_dice | val_loss
+  mode: max
+  dice_every_n_epochs: 2
+  n_val_volumes: 8               # BraTS *val* split only. Test is never touched (trap #5).

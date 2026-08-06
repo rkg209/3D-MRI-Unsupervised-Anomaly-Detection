@@ -1,12 +1,12 @@
 # Architecture x loss study (Spec 005) — analysis
 
-**Status: 0 of 8 declared cells evaluated.** Source of truth for every number below is
+**Status: 0 of 9 declared cells evaluated.** Source of truth for every number below is
 `artifacts/tables/arch_loss_matrix.json`; nothing here is computed, estimated, or recalled from a
 planning document.
 
 ## Current state
 
-The matrix declares `n_cells = 8` and reports `n_available = 0`. Every cell carries
+The matrix declares `n_cells = 9` and reports `n_available = 0`. Every cell carries
 `available: false` and a machine-readable `na_reason`, and the reasons are not uniform — they record
 *different* kinds of absence, which is the point of tracking them separately. Four cells
 (`unetr__mse`, `unetr__ssim`, `unetr__multiscale_mse`, plus, in a stronger form,
@@ -14,11 +14,14 @@ The matrix declares `n_cells = 8` and reports `n_available = 0`. Every cell carr
 specifically `"no training code, no checkpoint"` — that cell has no training path at all and will
 stay `n/a` until one exists. Three cells (`unetr__mse_ssim`, `unet__mse`,
 `attention_unet__mse_ssim`) read `"not evaluated"`. The diffusion paradigm cell
-(`diffusion__ddpm`) reads `"untrained"`, and `stats.diffusion_available` is `false`.
+(`diffusion__ddpm`) reads `"untrained"`, and `stats.diffusion_available` is `false`. Spec 009 added
+a ninth cell, `unetr_synth__mse_ssim` (the synthetic-anomaly fine-tune), which reads `"not
+trained"` — it is a config-only row until the Spec 009 fine-tune actually runs (`/train`, GPU,
+manual invoke only).
 
 This is a fresh-repo snapshot, not a failure. `checkpoints/` and `data/` are user-supplied and are
 not present on this machine, so the harness had no `artifacts/metrics/<model>__<loss>/aggregate.json`
-to read for any cell. The renderer behaved correctly: it emitted the full 8-row declared matrix with
+to read for any cell. The renderer behaved correctly: it emitted the full 9-row declared matrix with
 an explicit, attributed `n/a` per cell rather than silently dropping the rows. An incomplete matrix
 that is honest about being incomplete is the correct artifact at this stage.
 

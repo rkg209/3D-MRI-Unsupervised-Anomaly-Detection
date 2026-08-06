@@ -10,9 +10,10 @@
 | unet | mse | reference | n/a (not evaluated) | n/a (not evaluated) | n/a (not evaluated) | n/a (not evaluated) | unet__mse |
 | attention_unet | mse_ssim | reference | n/a (not evaluated) | n/a (not evaluated) | n/a (not evaluated) | n/a (not evaluated) | attention_unet__mse_ssim |
 | diffusion | ddpm | paradigm | n/a (untrained) | n/a (untrained) | n/a (untrained) | n/a (untrained) | diffusion__ddpm |
+| unetr_synth | mse_ssim | novelty | n/a (not trained) | n/a (not trained) | n/a (not trained) | n/a (not trained) | unetr_synth__mse_ssim |
 
 PSNR/SSIM are explanatory context only (NFR-6/NFR-22) — never an optimization target and never a headline number.
 
 Spearman rho: n/a (fewer than 3 evaluated cells, n_pairs=0)
 
-0/8 cells evaluated; 8 cell(s) n/a.
+0/9 cells evaluated; 9 cell(s) n/a.

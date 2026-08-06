@@ -38,6 +38,19 @@
       "pr_auc": null,
       "roc_auc": null,
       "source_paths": []
+    },
+    {
+      "available": false,
+      "dice": null,
+      "iou": null,
+      "key": "unetr_synth__mse_ssim",
+      "localizes": true,
+      "na_reason": "not trained",
+      "operating_point": null,
+      "paradigm": "UNETR (synth-anomaly)",
+      "pr_auc": null,
+      "roc_auc": null,
+      "source_paths": []
     }
   ],
   "granularity_note": "Operating granularity is slice-level: each 2D axial slice is one sample. This does NOT localize an anomaly, so ROC-AUC here is NOT comparable to voxel-level Dice.",
@@ -53,6 +66,6 @@
     "best_roc_auc_key": null,
     "diffusion_available": false,
     "n_available": 0,
-    "n_columns": 3
+    "n_columns": 4
   }
 }

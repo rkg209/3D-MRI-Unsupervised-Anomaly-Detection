@@ -1,4 +1,4 @@
-.PHONY: help install slice sweep recon train eval report classical demo test lint check-data matrix slice-scores paradigm
+.PHONY: help install slice sweep recon train eval report classical demo test lint check-data matrix slice-scores paradigm synth-table
 .DEFAULT_GOAL := help
 
 # Hydra overrides, e.g.: make eval HYDRA_OVERRIDES="+experiment=cluster model=unetr"
@@ -56,6 +56,9 @@ demo:  ## Spec 010: export the demo video from a saved ReconResult
 # GPU-SPENDING. Manual invoke only — the agent must never run this autonomously (see CLAUDE.md).
 train:  ## Spec 009: synthetic-anomaly fine-tune. MANUAL ONLY.
 	$(PY) scripts/run_train.py $(HYDRA_OVERRIDES)
+
+synth-table:  ## Spec 009: render the before/after synthetic-anomaly Dice/IoU table. No GPU.
+	$(PY) scripts/run_synth_comparison.py $(HYDRA_OVERRIDES)
 
 test:  ## Run the test suite
 	pytest --cov=src/mri_ad --cov-report=term-missing

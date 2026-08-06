@@ -67,6 +67,15 @@ class FeatureCacheError(ClassicalError):
     """
 
 
+# ── train/ ────────────────────────────────────────────────────────────────────
+class TrainError(MRIAnomalyDetectionError):
+    """Base class for training-loop failures (Spec 009).
+
+    Bad loader config, a run that never improved its selection score, or a
+    checkpoint/split-provenance violation.
+    """
+
+
 # ── config / artifacts ────────────────────────────────────────────────────────
 class ConfigError(MRIAnomalyDetectionError):
     """A required config key was missing or invalid."""

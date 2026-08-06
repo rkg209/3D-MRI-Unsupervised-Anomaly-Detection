@@ -1,0 +1,431 @@
+{
+  "config": {
+    "classical": {
+      "cache": {
+        "dir": "./artifacts/classical/features",
+        "enabled": true,
+        "refresh": false
+      },
+      "classifier": {
+        "name": "xgboost",
+        "params": {
+          "colsample_bytree": 0.8,
+          "eval_metric": "logloss",
+          "learning_rate": 0.05,
+          "max_depth": 5,
+          "min_child_weight": 5,
+          "n_estimators": 400,
+          "n_jobs": 4,
+          "reg_lambda": 1.0,
+          "subsample": 0.8,
+          "tree_method": "hist"
+        },
+        "scale_pos_weight": "auto"
+      },
+      "features": {
+        "drop_empty_slices": true,
+        "foreground_eps": 1e-06,
+        "glcm": {
+          "angles_deg": [
+            0,
+            45,
+            90,
+            135
+          ],
+          "distances": [
+            1
+          ],
+          "levels": 32,
+          "normed": true,
+          "props": [
+            "contrast",
+            "dissimilarity",
+            "homogeneity",
+            "energy",
+            "correlation",
+            "ASM"
+          ],
+          "symmetric": true
+        },
+        "gradient": {
+          "percentile": 90
+        },
+        "include_slice_index": false,
+        "label_threshold_voxels": 1,
+        "library": "skimage",
+        "percentiles": [
+          5,
+          25,
+          50,
+          75,
+          95
+        ],
+        "runlength": {
+          "angles_deg": [
+            0,
+            45,
+            90,
+            135
+          ],
+          "levels": 16
+        }
+      },
+      "granularity": "slice-level",
+      "report": {
+        "figures_dir": "./artifacts/classical/figures",
+        "metrics_dir": "./artifacts/classical/metrics"
+      },
+      "split": {
+        "build_contract_if_missing": true,
+        "cv": {
+          "n_splits": 5,
+          "scheme": "StratifiedGroupKFold",
+          "shuffle": true
+        },
+        "source": "brats_test"
+      },
+      "subject_limit": null
+    },
+    "data": {
+      "brats": {
+        "binarize_label": true,
+        "dir": "./data/brats/MICCAI_BraTS2020_TrainingData",
+        "label_interpolation": "nearest",
+        "modality": "t2"
+      },
+      "eval_subset": null,
+      "loader": {
+        "batch_size": 8,
+        "cache_rate": 0.0,
+        "num_workers": 4
+      },
+      "openbhb": {
+        "crop": {
+          "x": [
+            20,
+            196
+          ],
+          "y": [
+            20,
+            160
+          ],
+          "z": [
+            50,
+            130
+          ]
+        },
+        "dir": "./data/openbhb/val_quasiraw",
+        "max_volumes": null
+      },
+      "preprocess": {
+        "chunk_depth": 16,
+        "chunking": "deterministic",
+        "eps": 1e-08,
+        "normalize": "minmax",
+        "resize_mode": "trilinear"
+      },
+      "split": {
+        "brats": {
+          "test": 0.8,
+          "val": 0.2
+        },
+        "contract_path": "./artifacts/split_contract.json",
+        "openbhb": {
+          "train": 0.85,
+          "val": 0.15
+        }
+      }
+    },
+    "deterministic": true,
+    "device": "auto",
+    "eval": {
+      "figures_dir": "./artifacts/figures",
+      "labels_dir": null,
+      "legacy": {
+        "chunk_index": 4,
+        "crop_size": [
+          160,
+          130,
+          170
+        ],
+        "published_dice": 0.6255,
+        "published_iou": 0.4551,
+        "sort_subjects": true,
+        "subject_count": 100,
+        "threshold": 0.1,
+        "tolerance": 0.02
+      },
+      "legacy_compat": false,
+      "metrics_dir": "./artifacts/metrics",
+      "results_run_id": null
+    },
+    "loss": {
+      "name": "mse_ssim",
+      "params": {
+        "data_range": 1.0,
+        "mse_weight": 1.0,
+        "ssim_weight": 1.0
+      },
+      "target": "mri_ad.losses.SSIMMSELoss"
+    },
+    "matrix": {
+      "basename": "arch_loss_matrix",
+      "cells": [
+        {
+          "loss": "mse",
+          "model": "unetr",
+          "na_reason": "no checkpoint",
+          "role": "headline"
+        },
+        {
+          "loss": "ssim",
+          "model": "unetr",
+          "na_reason": "no checkpoint",
+          "role": "headline"
+        },
+        {
+          "loss": "mse_ssim",
+          "model": "unetr",
+          "na_reason": "not evaluated",
+          "role": "headline"
+        },
+        {
+          "loss": "multiscale_mse",
+          "model": "unetr",
+          "na_reason": "no checkpoint",
+          "role": "headline"
+        },
+        {
+          "loss": "perceptual",
+          "model": "unetr",
+          "na_reason": "no training code, no checkpoint",
+          "role": "headline"
+        },
+        {
+          "loss": "mse",
+          "model": "unet",
+          "na_reason": "not evaluated",
+          "role": "reference"
+        },
+        {
+          "loss": "mse_ssim",
+          "model": "attention_unet",
+          "na_reason": "not evaluated",
+          "role": "reference"
+        },
+        {
+          "loss": "ddpm",
+          "model": "diffusion",
+          "na_reason": "untrained",
+          "role": "paradigm"
+        },
+        {
+          "loss": "mse_ssim",
+          "model": "unetr_synth",
+          "na_reason": "not trained",
+          "role": "novelty"
+        }
+      ],
+      "metrics_root": "./artifacts/metrics",
+      "name": "arch_loss",
+      "tables_dir": "./artifacts/tables"
+    },
+    "model": {
+      "checkpoint": "./checkpoints/unetr_mse_ssim_aug.pth",
+      "name": "unetr",
+      "params": {
+        "conv_block": false,
+        "dropout_rate": 0.0,
+        "feature_size": 32,
+        "hidden_size": 768,
+        "img_size": [
+          16,
+          128,
+          128
+        ],
+        "in_channels": 1,
+        "mlp_dim": 3072,
+        "norm_name": "instance",
+        "num_heads": 12,
+        "num_layers": 12,
+        "patch_size": [
+          16,
+          16,
+          16
+        ],
+        "res_block": true
+      },
+      "target": "mri_ad.models.unetr.UNETRReconstruction"
+    },
+    "paradigm": {
+      "basename": "paradigm_comparison",
+      "classical_metrics_dir": "./artifacts/classical/metrics",
+      "columns": [
+        {
+          "key": "classical",
+          "localizes": false,
+          "na_reason": "not run",
+          "paradigm": "Classical"
+        },
+        {
+          "key": "unetr__mse_ssim",
+          "localizes": true,
+          "loss": "mse_ssim",
+          "model": "unetr",
+          "na_reason": "not evaluated",
+          "paradigm": "UNETR"
+        },
+        {
+          "key": "diffusion__ddpm",
+          "localizes": true,
+          "loss": "ddpm",
+          "model": "diffusion",
+          "na_reason": "untrained",
+          "paradigm": "Diffusion (AnoDDPM)"
+        },
+        {
+          "key": "unetr_synth__mse_ssim",
+          "localizes": true,
+          "loss": "mse_ssim",
+          "model": "unetr_synth",
+          "na_reason": "not trained",
+          "paradigm": "UNETR (synth-anomaly)"
+        }
+      ],
+      "figures_dir": "./artifacts/figures",
+      "metrics_root": "./artifacts/metrics",
+      "score_field": "flagged_fraction",
+      "slice_threshold": null,
+      "tables_dir": "./artifacts/tables",
+      "threshold_grid": [
+        0.005,
+        0.01,
+        0.02,
+        0.05,
+        0.1,
+        0.2
+      ]
+    },
+    "paths": {
+      "artifact_root": "./artifacts",
+      "checkpoint_root": "./checkpoints",
+      "data_root": "./data"
+    },
+    "recon": {
+      "batch_size": 4,
+      "results_dir": "./artifacts/results/recon",
+      "save_results": true
+    },
+    "seed": 42,
+    "shape": {
+      "channels": 1,
+      "depth": 16,
+      "height": 128,
+      "width": 128
+    },
+    "slice": {
+      "volume_id": null
+    },
+    "synth": {
+      "check": {
+        "abort_on_failure": true,
+        "max_intensity_dice": 0.5,
+        "n_samples": 32,
+        "n_thresholds": 256
+      },
+      "donor_chunk": "same",
+      "min_changed_fraction": 0.9,
+      "name": "fpi",
+      "params": {
+        "alpha_range": [
+          0.3,
+          0.7
+        ],
+        "corrupt_probability": 1.0,
+        "depth_size_range": [
+          4,
+          10
+        ],
+        "donor_alignment": "same",
+        "foreground_threshold": 0.05,
+        "max_placement_attempts": 25,
+        "min_foreground_fraction": 0.5,
+        "min_patch_contrast": 0.01,
+        "n_patches_range": [
+          1,
+          4
+        ],
+        "patch_size_range": [
+          8,
+          32
+        ],
+        "seed": 42
+      },
+      "target": "mri_ad.synth.fpi.FPIAnomalyGenerator"
+    },
+    "threshold": {
+      "name": "percentile",
+      "params": {
+        "percentile": 95.0
+      },
+      "sweep": {
+        "absolute": [
+          0.05,
+          0.1,
+          0.15,
+          0.2
+        ],
+        "percentiles": [
+          90.0,
+          92.5,
+          95.0,
+          97.5,
+          99.0
+        ]
+      },
+      "target": "mri_ad.recon.threshold.FixedPercentileThreshold"
+    },
+    "train": {
+      "allow_cpu": false,
+      "amp": false,
+      "checkpoint_path": "./checkpoints/unetr_synth.pth",
+      "early_stopping_patience": 6,
+      "grad_clip_norm": 1.0,
+      "init_from": "unetr",
+      "max_epochs": 20,
+      "name": "finetune",
+      "optimizer": {
+        "params": {
+          "lr": 1e-05,
+          "weight_decay": 1e-05
+        },
+        "target": "torch.optim.Adam"
+      },
+      "save_as": "unetr_synth",
+      "scheduler": {
+        "params": {
+          "factor": 0.5,
+          "mode": "min",
+          "patience": 3
+        },
+        "target": "torch.optim.lr_scheduler.ReduceLROnPlateau"
+      },
+      "selection": {
+        "dice_every_n_epochs": 2,
+        "metric": "val_dice",
+        "mode": "max",
+        "n_val_volumes": 8
+      }
+    }
+  },
+  "end_time": "2026-08-06T04:46:09.587985+00:00",
+  "git_dirty": true,
+  "git_sha": "e58bf3436403ed21075c06c34db977529918d2f3",
+  "hostname": "Rahuls-MacBook-Air-10.local",
+  "metrics": {
+    "available": false,
+    "reason": "No aggregate metrics for 'unetr__mse_ssim' at artifacts/metrics/unetr__mse_ssim/aggregate.json. Run `make eval` first."
+  },
+  "seed": 42,
+  "start_time": "2026-08-06T04:46:09.587679+00:00"
+}

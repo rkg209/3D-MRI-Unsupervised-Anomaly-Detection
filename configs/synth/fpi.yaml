@@ -1,0 +1,31 @@
+# Spec 009: Foreign Patch Interpolation. corrupted = (1-a)*target + a*donor inside a patch box.
+# Chosen over Poisson blending (boundary solve, slow) and 3D CutPaste (sharp edges are a shortcut
+# the model learns instead of anatomy).
+name: fpi
+target: mri_ad.synth.fpi.FPIAnomalyGenerator
+params:
+  # The spec's [8,32] is isotropic, but a chunk is only 16 deep. Splitting the range per axis is a
+  # DECLARED deviation: a depth-16 patch spans the whole slab and is a column, not a lesion.
+  patch_size_range: [8, 32]     # H and W
+  depth_size_range: [4, 10]     # D — must be <= shape.depth (validated -> ConfigError)
+  n_patches_range: [1, 4]
+  alpha_range: [0.3, 0.7]
+  # Foreground-only placement. A patch in the zero background blends 0 with 0: the mask is
+  # non-empty but nothing changed, which makes acceptance 1 vacuous and trains an identity map.
+  foreground_threshold: 0.05
+  min_foreground_fraction: 0.5
+  min_patch_contrast: 0.01      # floor only; acceptance 2 supplies the ceiling
+  max_placement_attempts: 25
+  donor_alignment: same         # same|random — same-location keeps anatomy aligned (harder task)
+  corrupt_probability: 1.0
+  seed: ${seed}
+
+donor_chunk: same               # same|random depth-slab index in the donor volume
+min_changed_fraction: 0.9       # acceptance-1 assertion 3
+
+# Acceptance 2, on REAL data, before the first optimizer step.
+check:
+  n_samples: 32
+  n_thresholds: 256
+  max_intensity_dice: 0.5       # oracle-optimistic bound over all thresholds, both polarities
+  abort_on_failure: true

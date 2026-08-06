@@ -1,18 +1,20 @@
 # Paradigm comparison — Classical vs UNETR vs Diffusion (Spec 007) — analysis
 
-**Status: 0 of 3 declared columns available.** Source of truth for every number below is
+**Status: 0 of 4 declared columns available.** Source of truth for every number below is
 `artifacts/tables/paradigm_comparison.json`; nothing here is computed, estimated, or recalled from a
 planning document or a prior report.
 
 ## Current state
 
-The comparison declares `stats.n_columns = 3` and reports `stats.n_available = 0`. Every column
-carries `available: false` with a machine-readable `na_reason`, and the three reasons record
+The comparison declares `stats.n_columns = 4` and reports `stats.n_available = 0`. Every column
+carries `available: false` with a machine-readable `na_reason`, and the reasons record
 *different* kinds of absence. `classical` reads `"not run"` — the baseline is implemented but has not
 been executed on a split. `unetr__mse_ssim` reads `"not evaluated"` — no test-split reconstructions
 have been scored. `diffusion__ddpm` reads `"untrained"`, and `stats.diffusion_available` is `false`;
 that paradigm has no checkpoint to evaluate because Spec 013's training run has not happened.
-`source_paths` is empty for all three, so no artifact was consumed to build any cell.
+Spec 009 added a fourth column, `unetr_synth__mse_ssim` (the synthetic-anomaly fine-tune), which
+reads `"not trained"` — config-only until the Spec 009 fine-tune actually runs. `source_paths` is
+empty for all four, so no artifact was consumed to build any cell.
 
 `split_hash` is `null` and the sample block is empty — `n_slices`, `n_positive`, and `prevalence` are
 all `null`. Acceptance test 1 (identical split, asserted by comparing hashes) is therefore not yet
@@ -21,7 +23,7 @@ rendered frame for the overlaid ROC/PR curves, but with zero available columns i
 
 This is a fresh-repo snapshot, not a failure. `checkpoints/` and `data/` are user-supplied and are
 not present on this machine, so the renderer had nothing to read for any column. It behaved correctly:
-it emitted the full three-column declared table with an explicit, attributed `n/a` per cell rather
+it emitted the full four-column declared table with an explicit, attributed `n/a` per cell rather
 than dropping the columns. An incomplete headline table that is honest about being incomplete is the
 correct artifact at this stage.
 

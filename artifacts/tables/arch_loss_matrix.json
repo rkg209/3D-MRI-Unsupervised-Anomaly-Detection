@@ -127,6 +127,22 @@
       "recon_run_id": null,
       "role": "paradigm",
       "ssim": null
+    },
+    {
+      "available": false,
+      "cell_id": "unetr_synth__mse_ssim",
+      "dice": null,
+      "eval_run_id": null,
+      "iou": null,
+      "loss": "mse_ssim",
+      "metrics_path": null,
+      "model": "unetr_synth",
+      "n_volumes": null,
+      "na_reason": "not trained",
+      "psnr_db": null,
+      "recon_run_id": null,
+      "role": "novelty",
+      "ssim": null
     }
   ],
   "stats": {
@@ -134,7 +150,7 @@
     "best_dice": null,
     "diffusion_available": false,
     "n_available": 0,
-    "n_cells": 8,
+    "n_cells": 9,
     "n_pairs": 0,
     "spearman_psnr_dice": null
   }

@@ -24,3 +24,6 @@ cells:
 
   # --- Paradigm row: does a generative prior escape the anti-correlation? ---
   - {model: diffusion, loss: ddpm, role: paradigm, na_reason: "untrained"}
+
+  # --- Spec 009 novelty: does synthetic-anomaly fine-tuning improve detection separability? ---
+  - {model: unetr_synth, loss: mse_ssim, role: novelty, na_reason: "not trained"}

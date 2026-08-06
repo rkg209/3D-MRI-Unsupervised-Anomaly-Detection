@@ -8,6 +8,8 @@ defaults:
   - matrix: arch_loss
   - classical: default
   - paradigm: default
+  - synth: fpi
+  - train: finetune
   - _self_
 
 # Reproducibility spine (Spec 000). Every entry point calls seed_everything(seed) first.

@@ -7,3 +7,4 @@ unetr__perceptual,unetr,perceptual,headline,"n/a (no training code, no checkpoin
 unet__mse,unet,mse,reference,n/a (not evaluated),n/a (not evaluated),n/a (not evaluated),n/a (not evaluated),not evaluated,,,,
 attention_unet__mse_ssim,attention_unet,mse_ssim,reference,n/a (not evaluated),n/a (not evaluated),n/a (not evaluated),n/a (not evaluated),not evaluated,,,,
 diffusion__ddpm,diffusion,ddpm,paradigm,n/a (untrained),n/a (untrained),n/a (untrained),n/a (untrained),untrained,,,,
+unetr_synth__mse_ssim,unetr_synth,mse_ssim,novelty,n/a (not trained),n/a (not trained),n/a (not trained),n/a (not trained),not trained,,,,
