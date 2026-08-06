@@ -1,0 +1,31 @@
+# Spec 013 from-scratch DDPM training. GPU. MANUAL INVOKE ONLY (/train, make train).
+#
+# Unlike configs/train/{finetune,msa_finetune}.yaml, there is no init_from/warm_start_from
+# checkpoint — from_scratch: true builds the registry model at random init and skips the FPI
+# synth dataset + separability preflight entirely (Spec 009 concepts, irrelevant to a denoising
+# objective on plain healthy volumes). See scripts/run_train.py's from-scratch branch.
+name: ddpm_scratch
+from_scratch: true
+save_as: diffusion               # must match configs/model/diffusion.yaml `name`
+checkpoint_path: ${paths.checkpoint_root}/diffusion.pth
+
+max_epochs: 100                  # from-scratch, not a fine-tune — needs the full schedule
+optimizer:
+  target: torch.optim.Adam
+  params:
+    lr: 1.0e-4                   # from-scratch LR (vs 009/012's 1e-5 fine-tune LR — there is no
+                                  # pretrained prior to protect against catastrophic forgetting)
+    weight_decay: 1.0e-5
+scheduler:
+  target: torch.optim.lr_scheduler.ReduceLROnPlateau
+  params: {mode: min, factor: 0.5, patience: 5}
+grad_clip_norm: 1.0
+early_stopping_patience: 10
+amp: false                       # off: mixed precision breaks bitwise determinism (NFR-1)
+allow_cpu: false                 # run_train.py raises ConfigError on a non-CUDA device unless true
+
+selection:
+  metric: val_loss               # D-7: DDPM denoising loss on held-out healthy OpenBHB, not
+  mode: min                      # val_dice — val_dice would need a full DDIM sampling pass over
+                                  # BraTS-val at an untuned t_noise, the most expensive validation
+                                  # in the project, selecting on a knob we are about to retune.

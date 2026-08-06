@@ -1,14 +1,21 @@
 #!/usr/bin/env python
 """Spec 009: fine-tune UNETR to restore FPI-corrupted volumes. GPU-spending.
 
+Spec 013 adds a second, from-scratch path: training AnoDDPM on plain healthy volumes.
+
 **MANUAL INVOKE ONLY** — the agent must never launch this on its own initiative (CLAUDE.md rule
 4). Reachable only via ``make train`` / the ``/train`` skill, which carries
 ``disable-model-invocation: true``.
 
-Preflight, in order: a CUDA-device guard (refuses an accidental laptop launch unless
-``train.allow_cpu=true``), the Spec 009 acceptance-2 real-data separability check (aborts
-*before the first optimizer step* if FPI corruption turns out to be trivially separable by a
-global intensity threshold), then ``Trainer.fit()``.
+Two paths, selected by ``cfg.train.from_scratch``:
+
+* **Fine-tune** (default, ``train=finetune``/``train=msa_finetune``): preflight is a CUDA-device
+  guard, then the Spec 009 acceptance-2 real-data separability check (aborts *before the first
+  optimizer step* if FPI corruption turns out to be trivially separable by a global intensity
+  threshold), then ``Trainer.fit()`` on the ``reconstruction_step`` objective.
+* **From-scratch** (``train=ddpm_scratch``, Spec 013): no FPI dataset, no separability check, no
+  starting checkpoint — trains :class:`~mri_ad.models.diffusion.DiffusionADModel` on plain
+  ``OpenBHBDataset`` volumes with the ``ddpm_step`` denoising objective.
 
 Run with ``make train HYDRA_OVERRIDES="+experiment=cluster"`` after ``make check-data``.
 """
@@ -36,7 +43,13 @@ from mri_ad.models import AnomalyDetectionModel, ModelRegistry, build_default_re
 from mri_ad.recon.engine import ReconstructionEngine
 from mri_ad.synth.dataset import AnomalyInformedDataset
 from mri_ad.synth.separability import best_intensity_dice
-from mri_ad.train import CheckpointWriter, Trainer, reconstruction_step, resolve_training_ids
+from mri_ad.train import (
+    CheckpointWriter,
+    Trainer,
+    ddpm_step,
+    reconstruction_step,
+    resolve_training_ids,
+)
 from mri_ad.utils.device import DeviceManager
 from mri_ad.utils.instantiate import instantiate_from_config
 from mri_ad.utils.run_logger import RunLogger
@@ -153,11 +166,16 @@ def _make_validate_fn(
 def _build_and_warm_start_model(registry: ModelRegistry, cfg: DictConfig) -> AnomalyDetectionModel:
     """Build the model named by ``cfg.train.save_as``/``init_from`` and load its starting weights.
 
+    Spec 013: ``train.from_scratch: true`` builds ``save_as`` at random init and returns
+    immediately — there is no pretrained checkpoint to fine-tune from, by design (D-8).
+
     Spec 012 (STRETCH): ``warm_start_from`` and ``init_from`` are mutually exclusive. The gated
     ``msa_unetr`` variant cannot load a plain-UNETR checkpoint under ``strict=True`` (it has extra
     gate keys), so it warm-starts via ``load_from_unetr`` — a key-partitioned, still-strict load
     (D4) — instead of the ordinary ``load_checkpoint`` path every other fine-tune uses.
     """
+    if bool(cfg.train.get("from_scratch", False)):
+        return registry.get(str(cfg.train.save_as))
     warm_start_from = cfg.train.get("warm_start_from")
     init_from = cfg.train.get("init_from")
     if warm_start_from and init_from:
@@ -179,33 +197,44 @@ def main(cfg: DictConfig) -> None:
     """Fine-tune ``cfg.train.init_from``, saving under ``cfg.train.save_as``.
 
     Or warm-start ``cfg.train.warm_start_from`` (Spec 012) on the same FPI corruption objective.
+    Or, with ``cfg.train.from_scratch: true`` (Spec 013), train a from-scratch DDPM denoising
+    objective on plain healthy volumes — no FPI dataset, no separability check, no starting
+    checkpoint (D-8).
     """
     seed_everything(cfg.seed, deterministic=cfg.deterministic)
     device = _require_cuda(cfg)
+    from_scratch = bool(cfg.train.get("from_scratch", False))
 
     with RunLogger(cfg) as run:
         contract = resolve_contract(cfg, build_if_missing=False)
         ids = resolve_training_ids(cfg, contract)
 
-        generator = instantiate_from_config(cfg.synth)
-        train_base = OpenBHBDataset(cfg, list(ids.openbhb_train))
-        val_base = OpenBHBDataset(cfg, list(ids.openbhb_val))
-        train_dataset = AnomalyInformedDataset(
-            train_base,
-            generator,
-            seed=int(cfg.seed),
-            epoch_invariant=False,
-            donor_chunk=str(cfg.synth.donor_chunk),
-        )
-        val_dataset = AnomalyInformedDataset(
-            val_base,
-            generator,
-            seed=int(cfg.seed),
-            epoch_invariant=True,
-            donor_chunk=str(cfg.synth.donor_chunk),
-        )
-
-        _preflight_separability_check(train_dataset, cfg)
+        if from_scratch:
+            # Spec 013: no FPI corruption to learn to invert — DDPM trains its generative prior
+            # directly on plain healthy chunks.
+            train_dataset = OpenBHBDataset(cfg, list(ids.openbhb_train))
+            val_dataset = OpenBHBDataset(cfg, list(ids.openbhb_val))
+            synth_meta: dict = {}
+        else:
+            generator = instantiate_from_config(cfg.synth)
+            train_base = OpenBHBDataset(cfg, list(ids.openbhb_train))
+            val_base = OpenBHBDataset(cfg, list(ids.openbhb_val))
+            train_dataset = AnomalyInformedDataset(
+                train_base,
+                generator,
+                seed=int(cfg.seed),
+                epoch_invariant=False,
+                donor_chunk=str(cfg.synth.donor_chunk),
+            )
+            val_dataset = AnomalyInformedDataset(
+                val_base,
+                generator,
+                seed=int(cfg.seed),
+                epoch_invariant=True,
+                donor_chunk=str(cfg.synth.donor_chunk),
+            )
+            _preflight_separability_check(train_dataset, cfg)
+            synth_meta = OmegaConf.to_container(cfg.synth.params, resolve=True)
 
         registry = build_default_registry()
         model = _build_and_warm_start_model(registry, cfg)
@@ -233,7 +262,17 @@ def main(cfg: DictConfig) -> None:
             optimizer, **OmegaConf.to_container(scheduler_cfg.params, resolve=True)
         )
 
-        validate_fn = _make_validate_fn(model, cfg, list(ids.brats_select))
+        # D-7: from-scratch selects on val_loss (the denoising loss itself), never val_dice — see
+        # configs/train/ddpm_scratch.yaml. No BraTS-val Dice validation loop is built for it.
+        validate_fn = (
+            None if from_scratch else _make_validate_fn(model, cfg, list(ids.brats_select))
+        )
+
+        train_meta = {"save_as": str(cfg.train.save_as)}
+        if from_scratch:
+            train_meta["from_scratch"] = True
+        else:
+            train_meta["init_from"] = str(cfg.train.init_from)
 
         checkpoint_writer = CheckpointWriter(
             Path(str(cfg.train.checkpoint_path)),
@@ -242,10 +281,12 @@ def main(cfg: DictConfig) -> None:
                 "git_sha": _git_sha(),
                 "seed": int(cfg.seed),
                 "split_hash": contract.content_hash(),
-                "synth": OmegaConf.to_container(cfg.synth.params, resolve=True),
-                "train": {"init_from": str(cfg.train.init_from), "save_as": str(cfg.train.save_as)},
+                "synth": synth_meta,
+                "train": train_meta,
             },
         )
+
+        step_fn = ddpm_step if from_scratch else reconstruction_step
 
         trainer = Trainer(
             model,
@@ -253,14 +294,14 @@ def main(cfg: DictConfig) -> None:
             scheduler=scheduler,
             train_loader=train_loader,
             val_loader=val_loader,
-            step_fn=functools.partial(reconstruction_step, criterion=criterion),
+            step_fn=functools.partial(step_fn, criterion=criterion),
             device=device,
             max_epochs=int(cfg.train.max_epochs),
             grad_clip_norm=float(cfg.train.grad_clip_norm),
             early_stopping_patience=int(cfg.train.early_stopping_patience),
             selection_key=str(cfg.train.selection.metric),
             selection_mode="max" if str(cfg.train.selection.metric) == "val_dice" else "min",
-            on_epoch_start=train_dataset.set_epoch,
+            on_epoch_start=None if from_scratch else train_dataset.set_epoch,
             validate_fn=validate_fn,
             checkpoint_writer=checkpoint_writer,
         )

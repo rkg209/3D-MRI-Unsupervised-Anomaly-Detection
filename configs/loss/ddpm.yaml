@@ -1,0 +1,6 @@
+# DDPM denoising objective (Spec 013): MSE between the predicted and the true injected noise.
+# This is what makes cfg.loss.name == "ddpm" and therefore cell_id == "diffusion__ddpm" at both
+# train and eval time (configs/matrix/arch_loss.yaml, configs/paradigm/default.yaml).
+name: ddpm
+target: torch.nn.MSELoss
+params: {}

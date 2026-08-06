@@ -1,10 +1,9 @@
-# AnoDDPM — the diffusion paradigm (headline, Spec 013). See specs/002-model-registry.md.
+# AnoDDPM — the diffusion paradigm (headline, Spec 013). See specs/013-diffusion-anomaly.md and
+# .claude/plans/013-diffusion-anomaly.md.
 #
-# PROVISIONAL: this spec only proves the shape/interface contract on a random-init net.
-# channels / attention_levels / num_train_timesteps / t_noise / scheduler choice are all
-# placeholders — Spec 013's /plan finalizes them from the AnoDDPM literature and a real
-# training run. There is no checkpoint yet: load_checkpoint always raises CheckpointError
-# until Spec 013 trains one.
+# t_noise below is the from-scratch-training starting value. Phase 3's val-split t_noise sweep
+# (`make tnoise-sweep`) overwrites it with the val-selected value, committed as a traceable
+# change — never tuned on the test split (trap #5).
 
 name: diffusion
 target: mri_ad.models.diffusion.DiffusionADModel
@@ -15,10 +14,17 @@ params:
   out_channels: 1
   num_res_blocks: [1, 1, 2]
   channels: [32, 64, 64]
-  attention_levels: [false, false, true]
+  attention_levels: [false, false, true] # attention only at the coarsest level (memory risk)
   norm_num_groups: 32 # each `channels` entry must be a multiple of this (DiffusionModelUNet constraint)
   num_head_channels: 8
   num_train_timesteps: 1000
-  t_noise: 250 # AnoDDPM-style partial noise, not full forward diffusion
+  t_noise: 250 # AnoDDPM-style partial noise, not full forward diffusion. Val-tuned in Phase 3.
+  sampler: ddim # train with DDPM, sample with DDIM (D-2): ~5x fewer network calls, eta=0 deterministic
+  num_inference_steps: 50 # strided DDIM steps
+  sample_seed: 0 # seeds the one stochastic op (initial noise draw); reproducible with eta=0 (D-6)
 
 checkpoint: ${paths.checkpoint_root}/diffusion.pth
+
+# t_noise candidates for scripts/run_tnoise_sweep.py (D-10). Val-split only.
+sweep:
+  t_noise_values: [100, 150, 200, 250, 300, 400, 500]

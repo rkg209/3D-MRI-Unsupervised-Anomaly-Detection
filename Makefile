@@ -1,4 +1,4 @@
-.PHONY: help install slice sweep recon train eval report report-check classical demo test lint check-data matrix slice-scores paradigm synth-table
+.PHONY: help install slice sweep tnoise-sweep recon train eval report report-check classical demo test lint check-data matrix slice-scores paradigm synth-table
 .DEFAULT_GOAL := help
 
 # Hydra overrides, e.g.: make eval HYDRA_OVERRIDES="+experiment=cluster model=unetr"
@@ -27,6 +27,10 @@ slice:  ## Spec 000: one checkpoint, one volume -> Dice + figure
 # GPU-SPENDING. Manual invoke only. e.g. make sweep HYDRA_OVERRIDES="+experiment=cluster model=unetr"
 sweep:  ## Spec 003: Dice-vs-threshold sweep on the VALIDATION split. MANUAL ONLY.
 	$(PY) scripts/run_sweep.py $(HYDRA_OVERRIDES)
+
+# GPU-SPENDING. Manual invoke only. e.g. make tnoise-sweep HYDRA_OVERRIDES="+experiment=cluster model=diffusion"
+tnoise-sweep:  ## Spec 013: t_noise x threshold sweep on the VALIDATION split. MANUAL ONLY.
+	$(PY) scripts/run_tnoise_sweep.py $(HYDRA_OVERRIDES)
 
 # GPU-SPENDING. Manual invoke only. e.g. make recon HYDRA_OVERRIDES="+experiment=cluster model=unetr"
 recon:  ## Spec 004: reconstruct the TEST split -> saved ReconResults. MANUAL ONLY.

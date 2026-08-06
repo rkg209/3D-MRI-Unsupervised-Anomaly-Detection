@@ -60,10 +60,11 @@ def _small_unetr():
 def _small_diffusion():
     from mri_ad.models.diffusion import DiffusionADModel
 
-    # t_noise=0 -> exactly one reverse step. A full-resolution (16,128,128) 3D conv net call is
-    # expensive with no GPU; the shape/interface contract only needs the loop to run >=1 time
-    # (Spec 013 tunes t_noise for real once trained; see the diffusion-forward-speed risk note
-    # in .claude/plans/002-model-registry.md).
+    # t_noise=0, sampler="ddpm" -> exactly one reverse step (no DDIM strided schedule to build,
+    # which keeps this factory decoupled from num_train_timesteps/num_inference_steps sizing —
+    # tests/test_diffusion.py exercises the real DDIM path). A full-resolution (16,128,128) 3D
+    # conv net call is expensive with no GPU; the shape/interface contract only needs the loop
+    # to run >=1 time.
     return DiffusionADModel(
         spatial_dims=3,
         in_channels=1,
@@ -75,6 +76,7 @@ def _small_diffusion():
         num_head_channels=4,
         num_train_timesteps=2,
         t_noise=0,
+        sampler="ddpm",
     )
 
 
@@ -139,11 +141,19 @@ def test_unet_family_wraps_net_with_no_extra_output_activation(name: str) -> Non
     assert torch.equal(wrapped_out, net_out)
 
 
+# Models whose load_checkpoint targets the whole wrapper (D-5), not the inner `.net` — the
+# on-disk keys are `net.*`, matching what CheckpointWriter actually saves.
+WRAPPER_LEVEL_CHECKPOINT_MODELS = {"diffusion"}
+
+
 # ── checkpoint round-trip, both layouts (acceptance tests 1 & 5) ──────────────
-@pytest.mark.parametrize("name", ["unet", "attention_unet", "unetr"])
+@pytest.mark.parametrize("name", ["unet", "attention_unet", "unetr", "diffusion"])
 def test_checkpoint_round_trip_both_layouts(name: str, tmp_path: Path) -> None:
     model = MODEL_FACTORIES[name]()
-    inner = model.net if hasattr(model, "net") else model
+    if name in WRAPPER_LEVEL_CHECKPOINT_MODELS:
+        inner = model
+    else:
+        inner = model.net if hasattr(model, "net") else model
     state = inner.state_dict()
 
     bare = tmp_path / f"{name}_bare.pth"
@@ -154,7 +164,10 @@ def test_checkpoint_round_trip_both_layouts(name: str, tmp_path: Path) -> None:
     for path in (bare, wrapped):
         fresh = MODEL_FACTORIES[name]()
         fresh.load_checkpoint(path)  # must not raise
-        fresh_inner = fresh.net if hasattr(fresh, "net") else fresh
+        if name in WRAPPER_LEVEL_CHECKPOINT_MODELS:
+            fresh_inner = fresh
+        else:
+            fresh_inner = fresh.net if hasattr(fresh, "net") else fresh
         loaded_keys = set(fresh_inner.state_dict().keys())
         assert loaded_keys == set(state.keys())
 
@@ -179,15 +192,6 @@ def test_lfs_stub_checkpoint_raises(name: str, tmp_path: Path) -> None:
     model = MODEL_FACTORIES[name]()
     with pytest.raises(CheckpointError, match="stub"):
         model.load_checkpoint(stub)
-
-
-def test_diffusion_has_no_checkpoint_yet(tmp_path: Path) -> None:
-    """Spec 013 hasn't trained weights: any load attempt raises, never a silent partial load."""
-    from mri_ad.exceptions import CheckpointError
-
-    model = _small_diffusion()
-    with pytest.raises(CheckpointError):
-        model.load_checkpoint(tmp_path / "diffusion.pth")
 
 
 # ── model_card (acceptance test 7) ─────────────────────────────────────────────

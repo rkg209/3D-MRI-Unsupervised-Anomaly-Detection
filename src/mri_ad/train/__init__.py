@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from mri_ad.train.checkpointing import CheckpointWriter
 from mri_ad.train.loop import EpochRecord, StepFn, Trainer, TrainSummary
-from mri_ad.train.objectives import reconstruction_step
+from mri_ad.train.objectives import ddpm_step, reconstruction_step
 from mri_ad.train.splits import TrainingIds, resolve_training_ids
 
 __all__ = [
@@ -18,6 +18,7 @@ __all__ = [
     "Trainer",
     "TrainSummary",
     "TrainingIds",
+    "ddpm_step",
     "reconstruction_step",
     "resolve_training_ids",
 ]
