@@ -1,9 +1,11 @@
 # @package _global_
-# College GPU cluster. Full test split; make train supported (manual invoke only).
+# College GPU cluster (PARAM Rudra). Paths root at $SCR (=/scratch/IITB/ai-at-ieor/<user>); /scratch/<user>
+# does not exist there and home is quota-full. Falls back to /scratch/$USER if SCR is unset.
+# Full test split; make train supported (manual invoke only).
 paths:
-  data_root: /scratch/${oc.env:USER}/mri-data
-  checkpoint_root: /scratch/${oc.env:USER}/checkpoints
-  artifact_root: /scratch/${oc.env:USER}/artifacts
+  data_root: ${oc.env:SCR,/scratch/${oc.env:USER}}/mri-data
+  checkpoint_root: ${oc.env:SCR,/scratch/${oc.env:USER}}/checkpoints
+  artifact_root: ${oc.env:SCR,/scratch/${oc.env:USER}}/artifacts
 
 data:
   loader:

@@ -41,6 +41,34 @@ def _git(*args: str) -> str:
         return ""
 
 
+def _git_sha_from_files(start: Path | None = None) -> str:
+    """Read ``HEAD``'s commit SHA straight from ``.git`` (``""`` if it cannot be resolved).
+
+    Fallback for machines with no ``git`` binary — the PARAM Rudra GPU nodes — where a subprocess
+    call yields nothing and Spec 000 acceptance test 4 (non-empty ``git_sha``) would silently fail.
+    """
+    here = (start or Path(__file__)).resolve()
+    for root in (here, *here.parents):
+        git_dir = root / ".git"
+        if not git_dir.is_dir():
+            continue
+        try:
+            head = (git_dir / "HEAD").read_text().strip()
+            if not head.startswith("ref:"):
+                return head  # detached HEAD: the file is the SHA itself
+            ref = head.split(":", 1)[1].strip()
+            ref_file = git_dir / ref
+            if ref_file.is_file():
+                return ref_file.read_text().strip()
+            for line in (git_dir / "packed-refs").read_text().splitlines():
+                if line.endswith(" " + ref):
+                    return line.split(" ", 1)[0]
+        except OSError:
+            return ""
+        return ""
+    return ""
+
+
 class RunLogger:
     """Context manager that stamps a run directory with reproducible provenance.
 
@@ -103,9 +131,12 @@ class RunLogger:
         if self.run_dir is None or self._start is None:
             return
         end = datetime.now(UTC)
+        git_sha_from_git = _git("rev-parse", "HEAD")
+        git_sha = git_sha_from_git or _git_sha_from_files()
         meta: dict[str, Any] = {
-            "git_sha": _git("rev-parse", "HEAD"),
-            "git_dirty": bool(_git("status", "--porcelain")),
+            "git_sha": git_sha,
+            # None = unknown (no git binary). Never report a clean tree we could not check.
+            "git_dirty": bool(_git("status", "--porcelain")) if git_sha_from_git else None,
             "seed": int(self.cfg.seed),
             "hostname": socket.gethostname(),
             "start_time": self._start.isoformat(),

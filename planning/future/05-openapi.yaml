@@ -1,0 +1,1019 @@
+```yaml
+openapi: 3.0.3
+info:
+  title: 3D MRI Unsupervised Anomaly Detection API
+  description: |
+    REST API projection of the 3D MRI Unsupervised Anomaly Detection research
+    system. Exposes the artifact store, run management, evaluation pipeline,
+    and report generation as HTTP endpoints. All tensor payloads are referenced
+    by artifact paths rather than transmitted inline. Authentication is via
+    API key (single-researcher deployment; no OAuth required).
+  version: 1.0.0
+  contact:
+    name: MRI Anomaly Detection Research
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000/v1
+    description: Local development server
+  - url: http://cluster.local:8000/v1
+    description: GPU cluster node
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: runs
+    description: Run lifecycle management and audit trail
+  - name: checkpoints
+    description: Model checkpoint registry
+  - name: split-contracts
+    description: Deterministic dataset split management
+  - name: volumes
+    description: Volume identity and metadata
+  - name: recon-results
+    description: Reconstruction result artifacts
+  - name: volume-metrics
+    description: Per-volume evaluation metrics
+  - name: aggregate-metrics
+    description: Run-level aggregated evaluation metrics
+  - name: classical-metrics
+    description: Classical ML baseline cross-validation results
+  - name: inference
+    description: Trigger inference workflows
+  - name: reports
+    description: Report and visualization generation
+
+paths:
+
+  # ---------------------------------------------------------------------------
+  # Runs
+  # ---------------------------------------------------------------------------
+
+  /runs:
+    get:
+      operationId: listRuns
+      summary: List all runs
+      description: |
+        Returns a paginated list of run records ordered by start_time descending.
+        Crashed runs (end_time is null) are included unless filtered out.
+      tags: [runs]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: run_type
+          in: query
+          description: Filter by run type
+          schema:
+            $ref: '#/components/schemas/RunType'
+        - name: model_name
+          in: query
+          description: Filter by model architecture name
+          schema:
+            type: string
+            example: unetr
+        - name: include_crashed
+          in: query
+          description: Include runs with null end_time (default true)
+          schema:
+            type: boolean
+            default: true
+        - name: git_sha
+          in: query
+          description: Filter by exact git SHA
+          schema:
+            type: string
+            minLength: 40
+            maxLength: 41
+      responses:
+        '200':
+          description: Paginated list of runs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: createRun
+      summary: Register a new run
+      description: |
+        Called by entry-point scripts at startup (equivalent to
+        RunLogger.log_run_start). Creates a run record with null end_time.
+        Returns the assigned run_id.
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunCreateRequest'
+      responses:
+        '201':
+          description: Run created
+          headers:
+            Location:
+              description: URL of the created run
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /runs/{run_id}:
+    get:
+      operationId: getRun
+      summary: Get a run by ID
+      tags: [runs]
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+      responses:
+        '200':
+          description: Run record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    patch:
+      operationId: finalizeRun
+      summary: Finalize a run (log_run_end)
+      description: |
+        Appends end_time and final_metrics to an existing run record.
+        Equivalent to RunLogger.log_run_end. May only be called once per run;
+        subsequent calls return 409.
+      tags: [runs]
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunFinalizeRequest'
+      responses:
+        '200':
+          description: Run finalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Run already finalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      operationId: deleteRun
+      summary: Delete a run record and all associated artifacts
+      description: |
+        Deletes the run record and cascades to associated ReconResult,
+        VolumeMetrics, and AggregateMetrics records. Does not delete
+        checkpoints. Irreversible.
+      tags: [runs]
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+      responses:
+        '204':
+          description: Run deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Run is currently in progress (end_time is null)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /runs/{run_id}/training-log:
+    get:
+      operationId: getTrainingLog
+      summary: Stream training checkpoint log entries
+      description: |
+        Returns JSONL entries written by RunLogger.log_checkpoint during
+        training runs. Only valid for runs with run_type=train.
+      tags: [runs]
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+        - name: after_step
+          in: query
+          description: Return only entries with step > after_step
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '200':
+          description: Training log entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingLogPage'
+        '400':
+          description: Run is not a training run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: appendTrainingLogEntry
+      summary: Append a training checkpoint log entry
+      description: Equivalent to RunLogger.log_checkpoint(step, loss).
+      tags: [runs]
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrainingLogEntry'
+      responses:
+        '201':
+          description: Log entry appended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingLogEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ---------------------------------------------------------------------------
+  # Checkpoints
+  # ---------------------------------------------------------------------------
+
+  /checkpoints:
+    get:
+      operationId: listCheckpoints
+      summary: List all registered checkpoints
+      tags: [checkpoints]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: model_architecture
+          in: query
+          schema:
+            $ref: '#/components/schemas/ModelArchitecture'
+        - name: loss_combination
+          in: query
+          schema:
+            type: string
+            example: mse_ssim
+      responses:
+        '200':
+          description: Paginated list of checkpoints
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckpointPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: registerCheckpoint
+      summary: Register a checkpoint
+      description: |
+        Registers a checkpoint that already exists on disk. Does not upload
+        the file; records metadata only. For externally sourced pre-trained
+        weights, produced_by_run_id should be omitted.
+      tags: [checkpoints]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckpointCreateRequest'
+      responses:
+        '201':
+          description: Checkpoint registered
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Checkpoint'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: produced_by_run_id references a non-existent run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /checkpoints/{checkpoint_name}:
+    get:
+      operationId: getCheckpoint
+      summary: Get a checkpoint by name
+      tags: [checkpoints]
+      parameters:
+        - $ref: '#/components/parameters/CheckpointNameParam'
+      responses:
+        '200':
+          description: Checkpoint record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Checkpoint'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      operationId: deregisterCheckpoint
+      summary: Deregister a checkpoint
+      description: |
+        Removes the checkpoint record. Does not delete the file on disk.
+        Returns 409 if any run references this checkpoint.
+      tags: [checkpoints]
+      parameters:
+        - $ref: '#/components/parameters/CheckpointNameParam'
+      responses:
+        '204':
+          description: Checkpoint deregistered
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Checkpoint is referenced by one or more runs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /checkpoints/{checkpoint_name}/validate:
+    post:
+      operationId: validateCheckpoint
+      summary: Validate checkpoint file integrity
+      description: |
+        Checks that the file exists at file_path, that its size matches
+        file_size_bytes, and that it is loadable by the model architecture.
+        Equivalent to ModelRegistry.get() + load_checkpoint() dry-run.
+      tags: [checkpoints]
+      parameters:
+        - $ref: '#/components/parameters/CheckpointNameParam'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckpointValidationResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ---------------------------------------------------------------------------
+  # Split Contracts
+  # ---------------------------------------------------------------------------
+
+  /split-contracts:
+    get:
+      operationId: listSplitContracts
+      summary: List all split contracts
+      tags: [split-contracts]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: dataset_name
+          in: query
+          schema:
+            type: string
+            example: brats_2021
+      responses:
+        '200':
+          description: Paginated list of split contracts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SplitContractPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: createSplitContract
+      summary: Create a split contract
+      description: |
+        Write-once. If a split contract already exists for the given
+        (dataset_name, seed) pair, returns 409 unless
+        X-Override-Split: true is set in the request header.
+        Validates that train_indices, val_indices, and test_indices are
+        disjoint and their union equals range(total_volumes).
+      tags: [split-contracts]
+      parameters:
+        - name: X-Override-Split
+          in: header
+          description: Allow overwriting an existing split contract
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SplitContractCreateRequest'
+      responses:
+        '201':
+          description: Split contract created
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SplitContract'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Split contract already exists for this (dataset_name, seed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Index sets are not disjoint or do not cover range(total_volumes)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /split-contracts/{dataset_name}/{seed}:
+    get:
+      operationId: getSplitContract
+      summary: Get a split contract by dataset and seed
+      tags: [split-contracts]
+      parameters:
+        - name: dataset_name
+          in: path
+          required: true
+          schema:
+            type: string
+            example: brats_2021
+        - name: seed
+          in: path
+          required: true
+          schema:
+            type: integer
+            example: 42
+      responses:
+        '200':
+          description: Split contract
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SplitContract'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ---------------------------------------------------------------------------
+  # Volumes
+  # ---------------------------------------------------------------------------
+
+  /volumes:
+    get:
+      operationId: listVolumes
+      summary: List volume identities
+      description: |
+        Returns logical volume records derived from the filesystem and the
+        active SplitContract. No tensor data is returned.
+      tags: [volumes]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: dataset_name
+          in: query
+          schema:
+            type: string
+            example: brats_2021
+        - name: split_assignment
+          in: query
+          schema:
+            $ref: '#/components/schemas/SplitAssignment'
+        - name: has_label
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Paginated list of volume records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VolumePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /volumes/{volume_id}:
+    get:
+      operationId: getVolume
+      summary: Get a volume record by ID
+      description: |
+        volume_id format is <dataset_name>_<volume_index>,
+        e.g. brats_2021_007.
+      tags: [volumes]
+      parameters:
+        - $ref: '#/components/parameters/VolumeIdParam'
+      responses:
+        '200':
+          description: Volume record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Volume'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ---------------------------------------------------------------------------
+  # Reconstruction Results
+  # ---------------------------------------------------------------------------
+
+  /recon-results:
+    get:
+      operationId: listReconResults
+      summary: List reconstruction result records
+      tags: [recon-results]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: run_id
+          in: query
+          schema:
+            type: string
+        - name: volume_id
+          in: query
+          schema:
+            type: string
+        - name: model_name
+          in: query
+          schema:
+            type: string
+        - name: checkpoint_name
+          in: query
+          schema:
+            type: string
+        - name: threshold_strategy
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated list of recon result records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconResultPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: registerReconResult
+      summary: Register a reconstruction result artifact
+      description: |
+        Records metadata for a ReconResult .pt file that has been written
+        to disk by save_recon_result(). Does not upload tensor data.
+        The artifact_path must be accessible on the server filesystem.
+      tags: [recon-results]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconResultCreateRequest'
+      responses:
+        '201':
+          description: ReconResult registered
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Referenced run_id or checkpoint_name not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /recon-results/{run_id}/{volume_id}:
+    get:
+      operationId: getReconResult
+      summary: Get a reconstruction result record
+      tags: [recon-results]
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+        - $ref: '#/components/parameters/VolumeIdParam'
+      responses:
+        '200':
+          description: ReconResult record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      operationId: deleteReconResult
+      summary: Delete a reconstruction result record
+      description: Removes the record. Does not delete the .pt file on disk.
+      tags: [recon-results]
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+        - $ref: '#/components/parameters/VolumeIdParam'
+      responses:
+        '204':
+          description: ReconResult deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: ReconResult is referenced by VolumeMetrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ---------------------------------------------------------------------------
+  # Volume Metrics
+  # ---------------------------------------------------------------------------
+
+  /volume-metrics:
+    get:
+      operationId: listVolumeMetrics
+      summary: List per-volume evaluation metrics
+      tags: [volume-metrics]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: run_id
+          in: query
+          required: true
+          description: Filter by run (required; metrics are always scoped to a run)
+          schema:
+            type: string
+        - name: volume_id
+          in: query
+          schema:
+            type: string
+        - name: min_dice
+          in: query
+          schema:
+            type: number
+            format: float
+            minimum: 0
+            maximum: 1
+        - name: max_dice
+          in: query
+          schema:
+            type: number
+            format: float
+            minimum: 0
+            maximum: 1
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [dice, iou, psnr, ssim, volume_id]
+            default: volume_id
+        - name: sort_order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        '200':
+          description: Paginated list of per-volume metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VolumeMetricsPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: run_id not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: createVolumeMetrics
+      summary: Record per-volume metrics for a single volume
+      description: |
+        Called by AggregateEvaluator after VolumeEvaluator.evaluate().
+        Validates that dice and iou are in [0,1].
+      tags: [volume-metrics]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VolumeMetricsCreateRequest'
+      responses:
+        '201':
+          description: VolumeMetrics created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VolumeMetrics'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Referenced run_id or volume_id not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Metrics already exist for this (run_id, volume_id)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: dice or iou outside [0,1]
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /volume-metrics/{run_id}/{volume_id}:
+    get:
+      operationId: getVolumeMetrics
+      summary: Get per-volume metrics for a specific volume in a run
+      tags: [volume-metrics]
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+        - $ref: '#/components/parameters/VolumeIdParam'
+      responses:
+        '200':
+          description: VolumeMetrics record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VolumeMetrics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /volume-metrics/export:
+    get:
+      operationId: exportVolumeMetricsCsv
+      summary: Export per-volume metrics as CSV
+      description: |
+        Returns the per_volume.csv for a given run. Equivalent to reading
+        artifacts/runs/<run_id>/metrics/per_volume.csv directly.
+      tags: [volume-metrics]
+      parameters:
+        - name: run_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ---------------------------------------------------------------------------
+  # Aggregate Metrics
+  # ---------------------------------------------------------------------------
+
+  /aggregate-metrics:
+    get:
+      operationId: listAggregateMetrics
+      summary: List aggregate metrics across runs
+      description: |
+        Returns one AggregateMetrics record per completed eval run.
+        Used by ReportGenerator to assemble the comparison table.
+      tags: [aggregate-metrics]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: model_name
+          in: query
+          schema:
+            type: string
+        - name: checkpoint_name
+          in: query
+          schema:
+            type: string
+        - name: seed
+          in: query
+          description: Filter to runs using a specific seed (for split consistency validation)
+          schema:
+            type: integer
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [mean_dice, mean_iou, mean_psnr, mean_ssim, run_id]
+            default: mean_dice
+        - name: sort_order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: Paginated list of aggregate metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AggregateMetricsPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: createAggregateMetrics
+      summary: Record aggregate metrics for a completed eval run
+      description: |
+        Called by AggregateEvaluator after evaluate_split() completes.
+        Validates that n_volumes matches the count of VolumeMetrics records
+        for this run_id, and that mean_dice matches the computed mean.
+      tags: [aggregate-metrics]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AggregateMetricsCreateRequest'
+      responses:
+        '201':
+          description: AggregateMetrics created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AggregateMetrics'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: run_id not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: AggregateMetrics already exist for this run_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: |
+            n_volumes mismatch, mean_dice mismatch, or metrics outside
+            valid ranges
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /aggregate-metrics/{run_id}:
+    get:
+      operationId: getAggregateMetrics
+      summary: Get aggregate metrics for a specific run
+      tags: [aggregate-metrics]
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+      responses:
+        '200':
+          description: AggregateMetrics record

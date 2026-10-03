@@ -143,6 +143,22 @@
       "recon_run_id": null,
       "role": "novelty",
       "ssim": null
+    },
+    {
+      "available": false,
+      "cell_id": "msa_unetr__mse_ssim",
+      "dice": null,
+      "eval_run_id": null,
+      "iou": null,
+      "loss": "mse_ssim",
+      "metrics_path": null,
+      "model": "msa_unetr",
+      "n_volumes": null,
+      "na_reason": "stretch \u2014 not trained (Spec 012 gate closed)",
+      "psnr_db": null,
+      "recon_run_id": null,
+      "role": "stretch",
+      "ssim": null
     }
   ],
   "stats": {
@@ -150,7 +166,7 @@
     "best_dice": null,
     "diffusion_available": false,
     "n_available": 0,
-    "n_cells": 9,
+    "n_cells": 10,
     "n_pairs": 0,
     "spearman_psnr_dice": null
   }

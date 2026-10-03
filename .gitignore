@@ -38,10 +38,6 @@ htmlcov/
 *.swo
 *~
 
-# ── Claude Code (development tool — not part of the project)
-.claude/
-planning/
-specs/
-3d-mri-anomaly-detection-sdd-plan.md
-CLAUDE.md
-progress_report.md
+# ── Personal working docs — ops/testing notes, not part of the reviewed spec trail
+MANUAL_TESTING.md
+GPU_SERVER_TASKS.md

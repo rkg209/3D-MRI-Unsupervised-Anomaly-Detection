@@ -196,3 +196,27 @@ def test_device_manager_honours_explicit_and_auto() -> None:
 
     assert DeviceManager.get_device("cpu").type == "cpu"
     assert DeviceManager.get_device("auto").type in {"cuda", "mps", "cpu"}
+
+
+def test_git_sha_falls_back_to_dotgit_when_git_binary_missing(tmp_path, monkeypatch):
+    """GPU nodes have no ``git``: the SHA must still be recorded and ``git_dirty`` must be unknown."""
+    import json as _json
+
+    from omegaconf import OmegaConf
+
+    from mri_ad.utils import run_logger
+
+    sha = "a" * 40
+    (tmp_path / ".git" / "refs" / "heads").mkdir(parents=True)
+    (tmp_path / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    (tmp_path / ".git" / "refs" / "heads" / "main").write_text(sha + "\n")
+    assert run_logger._git_sha_from_files(tmp_path / "pkg" / "m.py") == sha
+
+    monkeypatch.setattr(run_logger, "_git", lambda *a: "")
+    monkeypatch.setattr(run_logger, "_git_sha_from_files", lambda *a: sha)
+    cfg = OmegaConf.create({"seed": 1, "paths": {"artifact_root": str(tmp_path / "art")}})
+    with run_logger.RunLogger(cfg):
+        pass
+    meta = _json.loads(next((tmp_path / "art" / "runs").glob("*/run_meta.json")).read_text())
+    assert meta["git_sha"] == sha
+    assert meta["git_dirty"] is None
